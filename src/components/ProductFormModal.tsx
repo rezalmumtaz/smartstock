@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { SKUWithCurrentStock, Warehouse, SKU } from "@/types/stock";
 import { formatRupiah } from "@/lib/utils";
+import { uploadImageToSupabase } from "@/lib/storage-service";
 
 interface ProductFormModalProps {
   isOpen: boolean;
@@ -100,14 +101,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // 1. Instant local preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setFotoUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // 2. Cloud Supabase Storage upload
+      const cloudUrl = await uploadImageToSupabase(file, "products");
+      if (cloudUrl) {
+        setFotoUrl(cloudUrl);
+      }
     }
   };
 

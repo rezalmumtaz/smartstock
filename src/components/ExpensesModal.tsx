@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ExpenseItem, Warehouse } from "@/types/stock";
 import { formatRupiah } from "@/lib/utils";
+import { uploadImageToSupabase } from "@/lib/storage-service";
 
 interface ExpensesModalProps {
   isOpen: boolean;
@@ -69,14 +70,21 @@ export const ExpensesModal: React.FC<ExpensesModalProps> = ({
     setIsAddOpen(false);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // 1. Instant local preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setReceiptUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // 2. Cloud Supabase Storage upload
+      const cloudUrl = await uploadImageToSupabase(file, "receipts");
+      if (cloudUrl) {
+        setReceiptUrl(cloudUrl);
+      }
     }
   };
 
