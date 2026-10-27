@@ -1,341 +1,351 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { SKU, SKUWithCurrentStock, VoiceParseResult } from "@/types/stock";
-import { ledgerService } from "@/lib/ledger-service";
+import React, { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
-import { AlphabetRibbon } from "@/components/AlphabetRibbon";
-import { SKUCard } from "@/components/SKUCard";
-import { QuickTransactionDrawer } from "@/components/QuickTransactionDrawer";
-import { LedgerHistoryDrawer } from "@/components/LedgerHistoryDrawer";
-import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
-import { BarcodePrintModal } from "@/components/BarcodePrintModal";
-import { StockOpnameModal } from "@/components/StockOpnameModal";
-import { AIConsultantDrawer } from "@/components/AIConsultantDrawer";
+import { SidebarDrawer } from "@/components/SidebarDrawer";
+import { DashboardTiles } from "@/components/DashboardTiles";
+import { ProductListModal } from "@/components/ProductListModal";
 import { ProductFormModal } from "@/components/ProductFormModal";
-import { formatRupiah } from "@/lib/utils";
-import { Mic, ArrowRightLeft, Sparkles, AlertCircle, PlusCircle, Plus } from "lucide-react";
+import { AddDocumentSheet } from "@/components/AddDocumentSheet";
+import { StockTransactionModal } from "@/components/StockTransactionModal";
+import { DocumentListModal } from "@/components/DocumentListModal";
+import { VoiceNoteModal } from "@/components/VoiceNoteModal";
+import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
+import { ContactsModal } from "@/components/ContactsModal";
+import { ExpensesModal } from "@/components/ExpensesModal";
+import { ReportsModal } from "@/components/ReportsModal";
+import { SettingsModal } from "@/components/SettingsModal";
+import { stockStore } from "@/lib/stock-store";
+import {
+  SKUWithCurrentStock,
+  Warehouse,
+  Contact,
+  TransactionDoc,
+  ExpenseItem,
+  TransactionType,
+  VoiceParseResult,
+  SKU,
+} from "@/types/stock";
+import { Sparkles } from "lucide-react";
 
 export default function HomePage() {
-  const [skus, setSkus] = useState<SKUWithCurrentStock[]>(() =>
-    ledgerService.getSKUsWithCurrentStock()
-  );
-  const [selectedLetter, setSelectedLetter] = useState<string>("SEMUA");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  // Store Data States
+  const [products, setProducts] = useState<SKUWithCurrentStock[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>({
+    id: "wh-1",
+    name: "Gudang Utama",
+    code: "GDG-01",
+    is_default: true,
+  });
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [transactions, setTransactions] = useState<TransactionDoc[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [summary, setSummary] = useState({
+    totalItems: 0,
+    totalAssetValuation: 0,
+    totalDocuments: 0,
+    criticalItemsCount: 0,
+    totalExpenses: 0,
+  });
 
-  // Modals & Drawers State
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [skuToEdit, setSkuToEdit] = useState<SKU | null>(null);
+  // UI Modal & Navigation States
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isProductsOpen, setIsProductsOpen] = useState(false);
+  const [isProductFormOpen, setIsProductFormOpen] = useState(false);
+  const [productToEdit, setProductToEdit] = useState<SKUWithCurrentStock | null>(null);
 
-  const [isTxDrawerOpen, setIsTxDrawerOpen] = useState(false);
-  const [selectedSkuForTx, setSelectedSkuForTx] = useState<SKUWithCurrentStock | null>(null);
+  const [isAddDocSheetOpen, setIsAddDocSheetOpen] = useState(false);
+  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [currentTxType, setCurrentTxType] = useState<TransactionType>("masuk");
+  const [preselectedProdForTx, setPreselectedProdForTx] = useState<SKUWithCurrentStock | null>(null);
 
-  const [isLedgerDrawerOpen, setIsLedgerDrawerOpen] = useState(false);
-  const [selectedSkuForLedger, setSelectedSkuForLedger] = useState<SKUWithCurrentStock | null>(null);
-
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [selectedSkuForPrint, setSelectedSkuForPrint] = useState<SKUWithCurrentStock | null>(null);
-
+  const [isDocsListOpen, setIsDocsListOpen] = useState(false);
+  const [isVoiceAIOpen, setIsVoiceAIOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scannerCallback, setScannerCallback] = useState<((barcode: string) => void) | null>(null);
 
-  const [isOpnameModalOpen, setIsOpnameModalOpen] = useState(false);
-  const [isAIConsultantOpen, setIsAIConsultantOpen] = useState(false);
+  const [isContactsOpen, setIsContactsOpen] = useState(false);
+  const [contactInitialType, setContactInitialType] = useState<"supplier" | "customer">("supplier");
 
-  // Load data awal
-  const refreshData = () => {
-    setSkus(ledgerService.getSKUsWithCurrentStock());
+  const [isExpensesOpen, setIsExpensesOpen] = useState(false);
+  const [isReportsOpen, setIsReportsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Sync state from stockStore
+  const refreshFromStore = () => {
+    setProducts(stockStore.getProducts());
+    setWarehouses(stockStore.getWarehouses());
+    setActiveWarehouse(stockStore.getActiveWarehouse());
+    setContacts(stockStore.getContacts());
+    setTransactions(stockStore.getTransactions());
+    setExpenses(stockStore.getExpenses());
+    setSummary(stockStore.getSummary());
   };
 
   useEffect(() => {
-    refreshData();
+    refreshFromStore();
+    const unsubscribe = stockStore.subscribe(refreshFromStore);
+    return () => unsubscribe();
   }, []);
 
-  // Filtered List berdasarkan Huruf Tab A-Z & Search
-  const filteredSkus = useMemo(() => {
-    return skus.filter((item) => {
-      // Filter Abjad
-      const firstChar = item.nama_barang.trim().charAt(0).toUpperCase();
-      const matchLetter = selectedLetter === "SEMUA" || firstChar === selectedLetter;
-
-      // Filter Search
-      const q = searchQuery.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        item.nama_barang.toLowerCase().includes(q) ||
-        item.kode_sku.toLowerCase().includes(q) ||
-        item.lokasi_rak.toLowerCase().includes(q) ||
-        item.barcode.includes(q);
-
-      return matchLetter && matchSearch;
-    });
-  }, [skus, selectedLetter, searchQuery]);
-
-  // Huruf yang tersedia & Huruf yang memiliki item kritis
-  const availableLetters = useMemo(() => {
-    const set = new Set<string>();
-    skus.forEach((s) => {
-      const char = s.nama_barang.trim().charAt(0).toUpperCase();
-      if (char >= "A" && char <= "Z") set.add(char);
-    });
-    return Array.from(set);
-  }, [skus]);
-
-  const criticalLetters = useMemo(() => {
-    const set = new Set<string>();
-    skus
-      .filter((s) => s.status_stok === "KRITIS")
-      .forEach((s) => {
-        const char = s.nama_barang.trim().charAt(0).toUpperCase();
-        if (char >= "A" && char <= "Z") set.add(char);
-      });
-    return Array.from(set);
-  }, [skus]);
-
-  // Metrik Agregat
-  const criticalCount = skus.filter((s) => s.status_stok === "KRITIS").length;
-  const totalAssetValue = skus.reduce((acc, s) => acc + s.total_nilai_aset, 0);
-
-  // Handler Scanner Barcode Kamera
-  const handleOpenGlobalScanner = () => {
-    setScannerCallback(() => (barcode: string) => {
-      const found = ledgerService.getSKUByBarcode(barcode);
-      if (found) {
-        const withStock = skus.find((s) => s.id === found.id) || null;
-        setSelectedSkuForTx(withStock);
-        setIsTxDrawerOpen(true);
-      } else {
-        alert(`Barcode "${barcode}" belum terdaftar pada Master SKU.`);
-      }
-    });
-    setIsScannerOpen(true);
+  // Handlers
+  const handleSelectWarehouse = (id: string) => {
+    stockStore.setActiveWarehouse(id);
+    setActiveWarehouse(stockStore.getActiveWarehouse());
   };
 
-  const handleOpenScannerForTx = () => {
-    setScannerCallback(() => (barcode: string) => {
-      const found = ledgerService.getSKUByBarcode(barcode);
-      if (found) {
-        const withStock = skus.find((s) => s.id === found.id) || null;
-        setSelectedSkuForTx(withStock);
-      } else {
-        alert(`Barcode "${barcode}" tidak ditemukan.`);
-      }
-    });
-    setIsScannerOpen(true);
+  const handleOpenStockIn = (preselected?: SKUWithCurrentStock) => {
+    setCurrentTxType("masuk");
+    setPreselectedProdForTx(preselected || null);
+    setIsTxModalOpen(true);
   };
 
-  const handleOpenScannerForOpname = (onScanned: (barcode: string) => void) => {
-    setScannerCallback(() => onScanned);
-    setIsScannerOpen(true);
+  const handleOpenStockOut = (preselected?: SKUWithCurrentStock) => {
+    setCurrentTxType("keluar");
+    setPreselectedProdForTx(preselected || null);
+    setIsTxModalOpen(true);
+  };
+
+  const handleSelectDocType = (type: TransactionType) => {
+    setCurrentTxType(type);
+    setPreselectedProdForTx(null);
+    setIsTxModalOpen(true);
+  };
+
+  // Voice AI Action Handler
+  const handleVoiceParseResult = (result: VoiceParseResult) => {
+    if (result.action === "TAMBAH_BARANG") {
+      setProductToEdit(null);
+      setIsProductFormOpen(true);
+    } else if (result.action === "BARANG_MASUK") {
+      let matchedProd = products.find((p) =>
+        result.nama_barang
+          ? p.nama_barang.toLowerCase().includes(result.nama_barang.toLowerCase())
+          : false
+      );
+      handleOpenStockIn(matchedProd);
+    } else if (result.action === "BARANG_KELUAR") {
+      let matchedProd = products.find((p) =>
+        result.nama_barang
+          ? p.nama_barang.toLowerCase().includes(result.nama_barang.toLowerCase())
+          : false
+      );
+      handleOpenStockOut(matchedProd);
+    } else if (result.action === "BIAYA") {
+      setIsExpensesOpen(true);
+    }
+  };
+
+  // Barcode Scan Match Handler
+  const handleBarcodeScanned = (code: string) => {
+    const matched = stockStore.getProductByBarcodeOrSku(code);
+    setIsScannerOpen(false);
+    if (matched) {
+      handleOpenStockOut(matched);
+    } else {
+      if (confirm(`Barcode "${code}" belum terdaftar. Tambahkan sebagai barang baru?`)) {
+        setProductToEdit(null);
+        setIsProductFormOpen(true);
+      }
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col items-center">
-      {/* Container Lebar Smartphone Max-Width (Portrait Native) */}
-      <div className="w-full max-w-md bg-slate-100 min-h-screen flex flex-col relative">
-        {/* Sticky Header */}
-        <Header
-          totalSku={skus.length}
-          criticalCount={criticalCount}
-          onOpenScanner={handleOpenGlobalScanner}
-          onOpenOpname={() => setIsOpnameModalOpen(true)}
-          onOpenAIConsultant={() => setIsAIConsultantOpen(true)}
-          onOpenCreateProduct={() => {
-            setSkuToEdit(null);
-            setIsProductModalOpen(true);
-          }}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      {/* 1. Top Header Bar (StoDo Simple Inspired) */}
+      <Header
+        onOpenDrawer={() => setIsDrawerOpen(true)}
+        onOpenScanner={() => setIsScannerOpen(true)}
+        onOpenVoiceAI={() => setIsVoiceAIOpen(true)}
+        warehouses={warehouses}
+        activeWarehouse={activeWarehouse}
+        onSelectWarehouse={handleSelectWarehouse}
+      />
 
-        {/* Sticky A-Z Ribbon ala Buku Kwarto */}
-        <AlphabetRibbon
-          selectedLetter={selectedLetter}
-          onSelectLetter={setSelectedLetter}
-          availableLetters={availableLetters}
-          criticalLetters={criticalLetters}
-        />
-
-        {/* Summary Card Ringkas */}
-        <div className="px-4 pt-3 pb-1">
-          <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Total Nilai Modal Gudang
+      {/* 2. Main Content Body */}
+      <main className="flex-1 max-w-xl mx-auto w-full p-4 sm:p-5 flex flex-col justify-center">
+        {/* Banner Quick Notification if Low Stock */}
+        {summary.criticalItemsCount > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setIsProductsOpen(true);
+            }}
+            className="mb-3 w-full bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-xs hover:bg-rose-100/80 transition-colors text-left"
+          >
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+              <span>
+                Peringatan: Ada <strong>{summary.criticalItemsCount} item</strong> stok hampir habis!
               </span>
-              <div className="font-mono font-black text-lg text-emerald-400">
-                {formatRupiah(totalAssetValue)}
-              </div>
             </div>
+            <span className="text-[11px] underline font-bold">Cek Barang &rarr;</span>
+          </button>
+        )}
 
-            <div className="text-right">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Indeks Tab Aktif
-              </span>
-              <div className="font-mono font-bold text-sm text-blue-300">
-                {selectedLetter === "SEMUA" ? "Semua Huruf" : `Huruf "${selectedLetter}"`} ({filteredSkus.length})
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Feed Kartu SKU Vertikal (Scroll ke Bawah) */}
-        <main className="flex-1 px-4 py-3 space-y-3">
-          {filteredSkus.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200 mt-4">
-              <AlertCircle className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-              <p className="font-bold text-slate-700 text-sm">Tidak Ada Barang Ditemukan</p>
-              <p className="text-xs text-slate-400 mt-1 mb-4">
-                Tidak ada barang dengan awalan huruf &quot;{selectedLetter}&quot; atau kata kunci tersebut.
-              </p>
-              <button
-                onClick={() => {
-                  setSkuToEdit(null);
-                  setIsProductModalOpen(true);
-                }}
-                className="py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center space-x-1.5 shadow"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tambah Barang Baru Sekarang</span>
-              </button>
-            </div>
-          ) : (
-            filteredSkus.map((sku) => (
-              <SKUCard
-                key={sku.id}
-                sku={sku}
-                onOpenLedger={(s) => {
-                  setSelectedSkuForLedger(s);
-                  setIsLedgerDrawerOpen(true);
-                }}
-                onOpenPrint={(s) => {
-                  setSelectedSkuForPrint(s);
-                  setIsPrintModalOpen(true);
-                }}
-                onQuickMutate={(s) => {
-                  setSelectedSkuForTx(s);
-                  setIsTxDrawerOpen(true);
-                }}
-                onEditSKU={(s) => {
-                  setSkuToEdit(s);
-                  setIsProductModalOpen(true);
-                }}
-              />
-            ))
-          )}
-        </main>
-
-        {/* Sticky Bottom Action Bar (Thumb-Friendly Ergonomic) */}
-        <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
-          <div className="max-w-md mx-auto px-4 pb-4 pt-2 pointer-events-auto">
-            <div className="bg-slate-900/90 backdrop-blur-md p-2 rounded-2xl border border-slate-800 shadow-2xl flex items-center space-x-2">
-              <button
-                onClick={() => {
-                  setSkuToEdit(null);
-                  setIsProductModalOpen(true);
-                }}
-                className="py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 font-bold text-xs flex items-center justify-center space-x-1.5 active:scale-95 transition-all"
-                title="Tambah SKU / Produk Baru"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>+ Barang</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedSkuForTx(null);
-                  setIsTxDrawerOpen(true);
-                }}
-                className="flex-1 py-3 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-md active:scale-95 transition-all"
-              >
-                <ArrowRightLeft className="w-4 h-4" />
-                <span>+ Catat Mutasi</span>
-              </button>
-
-              <button
-                onClick={() => setIsAIConsultantOpen(true)}
-                className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 active:scale-95 transition-all flex items-center justify-center"
-                title="AI Konsultan"
-              >
-                <Sparkles className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Modals & Drawers */}
-        <QuickTransactionDrawer
-          isOpen={isTxDrawerOpen}
-          onClose={() => {
-            setIsTxDrawerOpen(false);
-            setSelectedSkuForTx(null);
+        {/* 3. 8-Tile Teal Grid Dashboard & 4 Quick Buttons */}
+        <DashboardTiles
+          totalItems={summary.totalItems}
+          totalAssetValue={summary.totalAssetValuation}
+          totalDocuments={summary.totalDocuments}
+          totalExpenses={summary.totalExpenses}
+          onOpenProducts={() => setIsProductsOpen(true)}
+          onOpenDocuments={() => setIsDocsListOpen(true)}
+          onOpenReports={() => setIsReportsOpen(true)}
+          onOpenExpenses={() => setIsExpensesOpen(true)}
+          onOpenStockIn={() => handleOpenStockIn()}
+          onOpenStockOut={() => handleOpenStockOut()}
+          onOpenScanner={() => setIsScannerOpen(true)}
+          onOpenVoiceAI={() => setIsVoiceAIOpen(true)}
+          onOpenSuppliers={() => {
+            setContactInitialType("supplier");
+            setIsContactsOpen(true);
           }}
-          onSuccess={refreshData}
-          allSkus={skus}
-          initialSku={selectedSkuForTx}
-          onOpenScannerForSKU={handleOpenScannerForTx}
+          onOpenCustomers={() => {
+            setContactInitialType("customer");
+            setIsContactsOpen(true);
+          }}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenHelp={() => setIsReportsOpen(true)}
         />
+      </main>
 
-        <LedgerHistoryDrawer
-          isOpen={isLedgerDrawerOpen}
-          onClose={() => {
-            setIsLedgerDrawerOpen(false);
-            setSelectedSkuForLedger(null);
-          }}
-          sku={selectedSkuForLedger}
-          onMutate={(s) => {
-            setSelectedSkuForTx(s);
-            setIsTxDrawerOpen(true);
-          }}
-        />
+      {/* 4. Navigation Sidebar Drawer */}
+      <SidebarDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        currentView="dashboard"
+        onNavigate={(view) => {
+          if (view === "products") setIsProductsOpen(true);
+          else if (view === "documents") setIsDocsListOpen(true);
+          else if (view === "expenses") setIsExpensesOpen(true);
+          else if (view === "reports") setIsReportsOpen(true);
+          else if (view === "suppliers") {
+            setContactInitialType("supplier");
+            setIsContactsOpen(true);
+          } else if (view === "customers") {
+            setContactInitialType("customer");
+            setIsContactsOpen(true);
+          } else if (view === "settings" || view === "warehouses" || view === "subscription") {
+            setIsSettingsOpen(true);
+          }
+        }}
+      />
 
-        <BarcodePrintModal
-          isOpen={isPrintModalOpen}
-          onClose={() => {
-            setIsPrintModalOpen(false);
-            setSelectedSkuForPrint(null);
-          }}
-          sku={selectedSkuForPrint}
-        />
+      {/* 5. Modul Daftar Barang (Product List) */}
+      <ProductListModal
+        isOpen={isProductsOpen}
+        onClose={() => setIsProductsOpen(false)}
+        products={products}
+        activeWarehouse={activeWarehouse}
+        onAddNewProduct={() => {
+          setProductToEdit(null);
+          setIsProductFormOpen(true);
+        }}
+        onEditProduct={(p) => {
+          setProductToEdit(p);
+          setIsProductFormOpen(true);
+        }}
+        onDeleteProduct={(id) => stockStore.deleteProduct(id)}
+        onQuickStockIn={(p) => handleOpenStockIn(p)}
+        onQuickStockOut={(p) => handleOpenStockOut(p)}
+      />
 
-        <BarcodeScannerModal
-          isOpen={isScannerOpen}
-          onClose={() => {
-            setIsScannerOpen(false);
-            setScannerCallback(null);
-          }}
-          onScanSuccess={(code) => {
-            if (scannerCallback) scannerCallback(code);
-          }}
-        />
+      {/* 6. Form Tambah / Edit Barang (Add Product Modal with Image Uploader) */}
+      <ProductFormModal
+        isOpen={isProductFormOpen}
+        onClose={() => setIsProductFormOpen(false)}
+        activeWarehouse={activeWarehouse}
+        productToEdit={productToEdit}
+        onOpenScanner={() => setIsScannerOpen(true)}
+        onSave={(data, qty) => {
+          if (productToEdit) {
+            stockStore.updateProduct(productToEdit.id, data);
+          } else {
+            stockStore.addProduct(data, qty);
+          }
+        }}
+      />
 
-        <StockOpnameModal
-          isOpen={isOpnameModalOpen}
-          onClose={() => setIsOpnameModalOpen(false)}
-          onSuccess={refreshData}
-          onOpenScanner={handleOpenScannerForOpname}
-        />
+      {/* 7. Bottom Sheet Tambah Dokumen (Add Document Sheet) */}
+      <AddDocumentSheet
+        isOpen={isAddDocSheetOpen}
+        onClose={() => setIsAddDocSheetOpen(false)}
+        onSelectType={handleSelectDocType}
+      />
 
-        <AIConsultantDrawer
-          isOpen={isAIConsultantOpen}
-          onClose={() => setIsAIConsultantOpen(false)}
-          inventoryContext={skus}
-        />
+      {/* 8. Form Transaksi Masuk / Keluar (Stock Transaction Modal) */}
+      <StockTransactionModal
+        isOpen={isTxModalOpen}
+        onClose={() => setIsTxModalOpen(false)}
+        type={currentTxType}
+        products={products}
+        contacts={contacts}
+        activeWarehouse={activeWarehouse}
+        preselectedProduct={preselectedProdForTx}
+        onOpenScanner={() => setIsScannerOpen(true)}
+        onSaveTransaction={(txData) => stockStore.createTransaction(txData)}
+      />
 
-        <ProductFormModal
-          isOpen={isProductModalOpen}
-          onClose={() => {
-            setIsProductModalOpen(false);
-            setSkuToEdit(null);
-          }}
-          onSuccess={refreshData}
-          skuToEdit={skuToEdit}
-          onScanBarcode={(callback) => {
-            setScannerCallback(() => callback);
-            setIsScannerOpen(true);
-          }}
-        />
-      </div>
+      {/* 9. Daftar Dokumen Transaksi (Document List Modal) */}
+      <DocumentListModal
+        isOpen={isDocsListOpen}
+        onClose={() => setIsDocsListOpen(false)}
+        transactions={transactions}
+        activeWarehouse={activeWarehouse}
+        onAddNewDocument={() => setIsAddDocSheetOpen(true)}
+      />
+
+      {/* 10. AI Voice Note Modal (Special Feature) */}
+      <VoiceNoteModal
+        isOpen={isVoiceAIOpen}
+        onClose={() => setIsVoiceAIOpen(false)}
+        knownSkus={products}
+        onApplyResult={handleVoiceParseResult}
+      />
+
+      {/* 11. Barcode Scanner Camera Modal */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleBarcodeScanned}
+      />
+
+      {/* 12. CRM Kontak Pemasok & Pelanggan */}
+      <ContactsModal
+        isOpen={isContactsOpen}
+        onClose={() => setIsContactsOpen(false)}
+        contacts={contacts}
+        initialType={contactInitialType}
+        onAddContact={(c) => stockStore.addContact(c)}
+      />
+
+      {/* 13. Biaya Operasional Modal */}
+      <ExpensesModal
+        isOpen={isExpensesOpen}
+        onClose={() => setIsExpensesOpen(false)}
+        expenses={expenses}
+        activeWarehouse={activeWarehouse}
+        onAddExpense={(e) => stockStore.addExpense(e)}
+      />
+
+      {/* 14. Laporan & Analitik Modal */}
+      <ReportsModal
+        isOpen={isReportsOpen}
+        onClose={() => setIsReportsOpen(false)}
+        products={products}
+        transactions={transactions}
+        expenses={expenses}
+        contacts={contacts}
+      />
+
+      {/* 15. Pengaturan & Paket Langganan Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        warehouses={warehouses}
+        onAddWarehouse={(name, code) => stockStore.addWarehouse(name, code)}
+      />
     </div>
   );
 }

@@ -1,429 +1,500 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { SKU, SatuanBarang } from "@/types/stock";
-import { ledgerService } from "@/lib/ledger-service";
+import React, { useState, useEffect } from "react";
 import {
-  X,
-  Upload,
+  ArrowLeft,
+  Check,
+  Wand2,
+  ScanLine,
   Camera,
-  Package,
-  RefreshCw,
-  CheckCircle2,
-  Trash2,
   Image as ImageIcon,
-  AlertCircle,
+  Plus,
+  Minus,
+  Calculator,
+  ChevronRight,
+  ChevronDown,
+  X,
+  Warehouse as WarehouseIcon,
 } from "lucide-react";
+import { SKUWithCurrentStock, Warehouse, SKU } from "@/types/stock";
+import { formatRupiah } from "@/lib/utils";
 
 interface ProductFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
-  skuToEdit?: SKU | null;
-  onScanBarcode: (onScanned: (code: string) => void) => void;
+  onSave: (productData: Omit<SKU, "id" | "created_at" | "updated_at">, initialStock: number) => void;
+  productToEdit?: SKUWithCurrentStock | null;
+  activeWarehouse: Warehouse;
+  onOpenScanner?: () => void;
 }
-
-const SATUAN_OPTIONS: SatuanBarang[] = [
-  "Pcs",
-  "Box",
-  "Kg",
-  "Meter",
-  "Liter",
-  "Unit",
-  "Roll",
-  "Set",
-];
 
 export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   isOpen,
   onClose,
-  onSuccess,
-  skuToEdit,
-  onScanBarcode,
+  onSave,
+  productToEdit,
+  activeWarehouse,
+  onOpenScanner,
 }) => {
-  const isEditing = Boolean(skuToEdit);
-
+  const [nama, setNama] = useState("");
   const [kodeSku, setKodeSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [namaBarang, setNamaBarang] = useState("");
-  const [satuan, setSatuan] = useState<string>("Pcs");
-  const [lokasiRak, setLokasiRak] = useState("");
-  const [hargaBeli, setHargaBeli] = useState<number>(0);
-  const [batasStokMinimum, setBatasStokMinimum] = useState<number>(10);
-  const [saldoAwal, setSaldoAwal] = useState<number>(0);
+  const [deskripsi, setDeskripsi] = useState("");
+  const [kuantitas, setKuantitas] = useState(0);
+  const [satuan, setSatuan] = useState("Pcs");
+  const [hargaBeli, setHargaBeli] = useState(0);
+  const [hargaJual, setHargaJual] = useState(0);
+  const [minStock, setMinStock] = useState(10);
+  const [lokasiRak, setLokasiRak] = useState("Rak A-01");
   const [fotoUrl, setFotoUrl] = useState<string>("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Custom Fields (Bidang Barang)
+  const [isCustomFieldsOpen, setIsCustomFieldsOpen] = useState(false);
+  const [expiryDate, setExpiryDate] = useState("");
+  const [warna, setWarna] = useState("");
+  const [ukuran, setUkuran] = useState("");
 
   useEffect(() => {
-    if (skuToEdit) {
-      setKodeSku(skuToEdit.kode_sku);
-      setBarcode(skuToEdit.barcode);
-      setNamaBarang(skuToEdit.nama_barang);
-      setSatuan(skuToEdit.satuan);
-      setLokasiRak(skuToEdit.lokasi_rak);
-      setHargaBeli(skuToEdit.harga_beli);
-      setBatasStokMinimum(skuToEdit.batas_stok_minimum);
-      setFotoUrl(skuToEdit.foto_produk_url || "");
-      setSaldoAwal(0);
+    if (productToEdit) {
+      setNama(productToEdit.nama_barang);
+      setKodeSku(productToEdit.kode_sku);
+      setBarcode(productToEdit.barcode);
+      setDeskripsi(productToEdit.deskripsi || "");
+      setKuantitas(productToEdit.sisa_stok);
+      setSatuan(productToEdit.satuan);
+      setHargaBeli(productToEdit.harga_beli);
+      setHargaJual(productToEdit.harga_jual || 0);
+      setMinStock(productToEdit.batas_stok_minimum);
+      setLokasiRak(productToEdit.lokasi_rak || "Rak A-01");
+      setFotoUrl(productToEdit.foto_produk_url || "");
+      setExpiryDate(productToEdit.custom_fields?.expiry_date || "");
+      setWarna(productToEdit.custom_fields?.color || "");
+      setUkuran(productToEdit.custom_fields?.size || "");
     } else {
-      // Form baru: generate kode & barcode acak
-      const randomCode = Math.floor(100 + Math.random() * 900);
-      setKodeSku(`SKU-${randomCode}`);
-      setBarcode(`899${Date.now().toString().slice(-8)}`);
-      setNamaBarang("");
-      setSatuan("Pcs");
-      setLokasiRak("Rak A-1");
-      setHargaBeli(0);
-      setBatasStokMinimum(10);
-      setSaldoAwal(0);
-      setFotoUrl("");
+      resetForm();
     }
-    setErrorMessage(null);
-  }, [isOpen, skuToEdit]);
+  }, [productToEdit, isOpen]);
 
-  if (!isOpen) return null;
-
-  // Handle Upload Foto dari File / Kamera HP
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Batasi ukuran maksimal 5MB
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage("Ukuran gambar terlalu besar (Maksimal 5MB).");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setFotoUrl(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+  const resetForm = () => {
+    setNama("");
+    setKodeSku("");
+    setBarcode("");
+    setDeskripsi("");
+    setKuantitas(0);
+    setSatuan("Pcs");
+    setHargaBeli(0);
+    setHargaJual(0);
+    setMinStock(10);
+    setLokasiRak("Rak A-01");
+    setFotoUrl("");
+    setExpiryDate("");
+    setWarna("");
+    setUkuran("");
   };
 
   const handleGenerateBarcode = () => {
-    setBarcode(`899${Date.now().toString().slice(-8)}`);
+    const random12 = "899" + Math.floor(100000000 + Math.random() * 900000000).toString();
+    setBarcode(random12);
+    if (!kodeSku) {
+      setKodeSku("SKU-" + random12.slice(-4));
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFotoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
-
-    if (!namaBarang.trim()) {
-      setErrorMessage("Nama barang wajib diisi.");
-      return;
-    }
-    if (!kodeSku.trim()) {
-      setErrorMessage("Kode SKU wajib diisi.");
-      return;
-    }
-    if (!barcode.trim()) {
-      setErrorMessage("Barcode wajib diisi.");
-      return;
-    }
-    if (!lokasiRak.trim()) {
-      setErrorMessage("Lokasi rak wajib diisi.");
+    if (!nama.trim()) {
+      alert("Nama barang wajib diisi!");
       return;
     }
 
-    try {
-      if (isEditing && skuToEdit) {
-        ledgerService.updateSKU(skuToEdit.id, {
-          kode_sku: kodeSku.trim().toUpperCase(),
-          barcode: barcode.trim(),
-          nama_barang: namaBarang.trim(),
-          satuan,
-          lokasi_rak: lokasiRak.trim().toUpperCase(),
-          harga_beli: hargaBeli || 0,
-          batas_stok_minimum: batasStokMinimum || 0,
-          foto_produk_url: fotoUrl.trim() || undefined,
-        });
-      } else {
-        ledgerService.addSKU(
-          {
-            kode_sku: kodeSku.trim().toUpperCase(),
-            barcode: barcode.trim(),
-            nama_barang: namaBarang.trim(),
-            satuan,
-            lokasi_rak: lokasiRak.trim().toUpperCase(),
-            harga_beli: hargaBeli || 0,
-            batas_stok_minimum: batasStokMinimum || 0,
-            foto_produk_url: fotoUrl.trim() || undefined,
-            is_active: true,
-          },
-          saldoAwal
-        );
-      }
+    const finalBarcode = barcode.trim() || "899" + Math.floor(100000000 + Math.random() * 900000000).toString();
+    const finalSku = kodeSku.trim() || "SKU-" + finalBarcode.slice(-4);
 
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      setErrorMessage(err.message || "Gagal menyimpan produk.");
-    }
+    onSave(
+      {
+        nama_barang: nama.trim(),
+        kode_sku: finalSku,
+        barcode: finalBarcode,
+        deskripsi: deskripsi.trim(),
+        satuan,
+        lokasi_rak: lokasiRak,
+        harga_beli: Number(hargaBeli) || 0,
+        harga_jual: Number(hargaJual) || 0,
+        batas_stok_minimum: Number(minStock) || 5,
+        foto_produk_url: fotoUrl || undefined,
+        custom_fields: {
+          expiry_date: expiryDate || undefined,
+          color: warna || undefined,
+          size: ukuran || undefined,
+        },
+        is_active: true,
+      },
+      Number(kuantitas) || 0
+    );
+
+    onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center p-0">
-      <div className="bg-white w-full max-w-md rounded-t-3xl p-5 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar animate-in slide-in-from-bottom duration-200">
-        {/* Drag Indicator */}
-        <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div>
-            <h3 className="font-bold text-base text-slate-900">
-              {isEditing ? "Pengaturan / Edit Barang" : "Tambah Item Produk Baru"}
-            </h3>
-            <p className="text-xs text-slate-500">
-              {isEditing ? `Mengubah data ${skuToEdit?.kode_sku}` : "Daftarkan SKU baru ke Master Data Gudang"}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {/* Bagian Upload Foto Produk */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Foto Produk (Kamera / Galeri HP)
-            </label>
-
-            <div className="flex items-center space-x-3">
-              {/* Preview Thumbnail */}
-              <div className="relative w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {fotoUrl ? (
-                  <>
-                    <img
-                      src={fotoUrl}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFotoUrl("")}
-                      className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full hover:bg-black/80"
-                      title="Hapus foto"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </>
-                ) : (
-                  <ImageIcon className="w-7 h-7 text-slate-400" />
-                )}
-              </div>
-
-              {/* Action Buttons Upload */}
-              <div className="flex-1 space-y-1.5">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageFileChange}
-                  className="hidden"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center space-x-1.5 active:scale-95 transition-all"
-                >
-                  <Camera className="w-4 h-4 text-blue-600" />
-                  <span>Ambil Foto / Pilih File</span>
-                </button>
-
-                <input
-                  type="text"
-                  value={fotoUrl.startsWith("data:") ? "" : fotoUrl}
-                  onChange={(e) => setFotoUrl(e.target.value)}
-                  placeholder="Atau tempel URL gambar (https://...)"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-500"
-                />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-white h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Header Bar (Matching StoDo Screenshot 22.16.52) */}
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-full hover:bg-slate-100 active:scale-95 text-slate-700 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="font-bold text-base text-slate-900">
+                {productToEdit ? "Edit Barang" : "Tambahkan barang"}
+              </h2>
+              <div className="inline-flex items-center space-x-1 text-[11px] text-teal-800 font-semibold bg-teal-50 px-2 py-0.5 rounded-full">
+                <WarehouseIcon className="w-3 h-3" />
+                <span>{activeWarehouse.name}</span>
               </div>
             </div>
           </div>
 
-          {/* Nama Barang */}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="p-2 rounded-full bg-teal-700 hover:bg-teal-800 text-white shadow-md active:scale-95 transition-all"
+            title="Simpan"
+          >
+            <Check className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {/* 1. Nama Barang */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-teal-800 mb-1">
               Nama Barang <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
-              value={namaBarang}
-              onChange={(e) => setNamaBarang(e.target.value)}
-              placeholder="Contoh: Baut Baja Hitam M10 x 60mm"
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-500"
               required
+              value={nama}
+              onChange={(e) => setNama(e.target.value)}
+              placeholder="Contoh: Kopi Robusta 250g"
+              className="w-full text-base font-semibold text-slate-900 border-b-2 border-teal-700 focus:border-teal-900 focus:outline-hidden py-1 px-1 bg-teal-50/20"
             />
           </div>
 
-          {/* Kode SKU & Lokasi Rak */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Kode SKU <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={kodeSku}
-                onChange={(e) => setKodeSku(e.target.value.toUpperCase())}
-                placeholder="B-003"
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Lokasi Rak <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={lokasiRak}
-                onChange={(e) => setLokasiRak(e.target.value)}
-                placeholder="Rak A-2"
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                required
-              />
-            </div>
+          {/* 2. Kode Barang (SKU) */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Kode barang (SKU)</label>
+            <input
+              type="text"
+              value={kodeSku}
+              onChange={(e) => setKodeSku(e.target.value)}
+              placeholder="Contoh: KOB-01"
+              className="w-full text-sm text-slate-800 border-b border-slate-300 focus:border-teal-700 focus:outline-hidden py-1 px-1"
+            />
           </div>
 
-          {/* Barcode System */}
+          {/* 3. Barcode with Auto-generate & Scan Button */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] font-bold text-slate-700">
-                Nomor Barcode / QR Code
-              </label>
-              <button
-                type="button"
-                onClick={handleGenerateBarcode}
-                className="text-[10px] text-blue-600 font-bold flex items-center space-x-0.5 hover:underline"
-              >
-                <RefreshCw className="w-3 h-3 mr-0.5" />
-                <span>Auto-generate</span>
-              </button>
-            </div>
-
-            <div className="flex space-x-1.5">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Barcode</label>
+            <div className="flex items-center space-x-2">
               <input
                 type="text"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
-                placeholder="89910010001"
-                className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-500"
-                required
+                placeholder="Scan atau input barcode"
+                className="flex-1 text-sm text-slate-800 border-b border-slate-300 focus:border-teal-700 focus:outline-hidden py-1 px-1 font-mono"
               />
               <button
                 type="button"
-                onClick={() => onScanBarcode((scanned) => setBarcode(scanned))}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-slate-700 text-xs font-bold flex items-center space-x-1"
-                title="Scan barcode fisik barang"
+                onClick={handleGenerateBarcode}
+                className="p-2 rounded-xl border border-teal-600 text-teal-700 hover:bg-teal-50 active:scale-95 transition-all shadow-xs"
+                title="Auto Generate Barcode"
               >
-                <Camera className="w-4 h-4 text-blue-600" />
-                <span>Scan</span>
+                <Wand2 className="w-4 h-4" />
               </button>
+              {onOpenScanner && (
+                <button
+                  type="button"
+                  onClick={onOpenScanner}
+                  className="p-2 rounded-xl border border-teal-600 text-teal-700 hover:bg-teal-50 active:scale-95 transition-all shadow-xs"
+                  title="Scan via Kamera"
+                >
+                  <ScanLine className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Satuan & Harga Beli (HPP) */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Satuan
-              </label>
-              <select
-                value={satuan}
-                onChange={(e) => setSatuan(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-500"
-              >
-                {SATUAN_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Harga Beli (HPP)
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={hargaBeli || ""}
-                onChange={(e) => setHargaBeli(parseInt(e.target.value, 10) || 0)}
-                placeholder="1500"
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-              />
-            </div>
+          {/* 4. Deskripsi */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Deskripsi</label>
+            <textarea
+              rows={2}
+              value={deskripsi}
+              onChange={(e) => setDeskripsi(e.target.value)}
+              placeholder="Tambahkan keterangan barang..."
+              className="w-full text-xs text-slate-800 border-b border-slate-300 focus:border-teal-700 focus:outline-hidden py-1 px-1 resize-none"
+            />
           </div>
 
-          {/* Batas Stok Minimum (ROP) & Saldo Awal (Khusus Create Baru) */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Min. Stok (ROP)
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={batasStokMinimum}
-                onChange={(e) => setBatasStokMinimum(parseInt(e.target.value, 10) || 0)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-[10px] text-slate-400">Alarm menyala jika sisa &le; nilai ini</span>
-            </div>
-
-            {!isEditing ? (
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Saldo Awal Fisik
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={saldoAwal || ""}
-                  onChange={(e) => setSaldoAwal(parseInt(e.target.value, 10) || 0)}
-                  placeholder="0"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-[10px] text-slate-400">Dicatat ke ledger Kwarto awal</span>
+          {/* 5. Banner "Atur Bidang Barang" (Custom Fields Accordion) */}
+          <div className="bg-teal-50/70 border border-teal-200/80 rounded-2xl p-3">
+            <button
+              type="button"
+              onClick={() => setIsCustomFieldsOpen(!isCustomFieldsOpen)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <div className="flex items-center space-x-2.5">
+                <div className="w-7 h-7 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-xs">
+                  +
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-teal-900">Atur bidang barang</div>
+                  <div className="text-[11px] text-teal-700">Tanggal kedaluwarsa, warna, ukuran, rak</div>
+                </div>
               </div>
-            ) : (
-              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200 text-[10px] text-slate-500 flex items-center">
-                <span>Perubahan stok dilakukan via menu <strong>Mutasi</strong> atau <strong>Opname</strong>.</span>
+              {isCustomFieldsOpen ? (
+                <ChevronDown className="w-4 h-4 text-teal-700" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-teal-700" />
+              )}
+            </button>
+
+            {isCustomFieldsOpen && (
+              <div className="mt-3 pt-3 border-t border-teal-200/60 space-y-2.5 text-xs animate-in fade-in">
+                <div>
+                  <label className="block text-slate-600 mb-0.5">Tanggal Kedaluwarsa (EXP)</label>
+                  <input
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="w-full p-2 rounded-xl bg-white border border-slate-200 focus:ring-1 focus:ring-teal-700"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-600 mb-0.5">Warna</label>
+                    <input
+                      type="text"
+                      value={warna}
+                      onChange={(e) => setWarna(e.target.value)}
+                      placeholder="Merah / Hitam"
+                      className="w-full p-2 rounded-xl bg-white border border-slate-200 focus:ring-1 focus:ring-teal-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 mb-0.5">Ukuran</label>
+                    <input
+                      type="text"
+                      value={ukuran}
+                      onChange={(e) => setUkuran(e.target.value)}
+                      placeholder="L / XL / 500ml"
+                      className="w-full p-2 rounded-xl bg-white border border-slate-200 focus:ring-1 focus:ring-teal-700"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-slate-600 mb-0.5">Lokasi Rak / Penyimpanan</label>
+                  <input
+                    type="text"
+                    value={lokasiRak}
+                    onChange={(e) => setLokasiRak(e.target.value)}
+                    placeholder="Contoh: Rak A-02"
+                    className="w-full p-2 rounded-xl bg-white border border-slate-200 focus:ring-1 focus:ring-teal-700"
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {errorMessage && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{errorMessage}</span>
+          {/* 6. Kuantitas & Satuan */}
+          <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="col-span-6">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Kuantitas</label>
+              <div className="flex items-center space-x-1.5">
+                <input
+                  type="number"
+                  min="0"
+                  value={kuantitas}
+                  onChange={(e) => setKuantitas(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-full text-base font-bold text-slate-900 border-b border-slate-300 py-1 px-1 focus:border-teal-700 focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => setKuantitas((prev) => Math.max(0, prev - 1))}
+                  className="p-1.5 rounded-xl border border-rose-300 text-rose-600 hover:bg-rose-50 active:scale-95"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKuantitas((prev) => prev + 1)}
+                  className="p-1.5 rounded-xl border border-teal-600 text-teal-700 hover:bg-teal-50 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          )}
 
-          {/* Submit Button */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              className="w-full py-3.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md active:scale-[0.98] transition-all flex items-center justify-center space-x-2"
-            >
-              <CheckCircle2 className="w-5 h-5" />
-              <span>{isEditing ? "SIMPAN PERUBAHAN PRODUK" : "TAMBAHKAN PRODUK KE MASTER"}</span>
-            </button>
+            <div className="col-span-6">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukuran</label>
+              <select
+                value={satuan}
+                onChange={(e) => setSatuan(e.target.value)}
+                className="w-full border-b border-slate-300 py-1.5 px-1 bg-transparent text-sm font-semibold text-slate-800 focus:border-teal-700 focus:outline-hidden"
+              >
+                <option value="Pcs">Pcs</option>
+                <option value="Box">Box</option>
+                <option value="Dus">Dus</option>
+                <option value="Sak">Sak</option>
+                <option value="Kg">Kg</option>
+                <option value="Liter">Liter</option>
+                <option value="Pack">Pack</option>
+                <option value="Lusin">Lusin</option>
+                <option value="Unit">Unit</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 7. Harga Beli & Harga Jual */}
+          <div className="grid grid-cols-2 gap-3 items-end">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-700">Harga Beli</label>
+                <Calculator className="w-3.5 h-3.5 text-teal-700" />
+              </div>
+              <div className="relative">
+                <span className="absolute left-1 top-1 text-xs text-slate-400">Rp</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="500"
+                  value={hargaBeli}
+                  onChange={(e) => setHargaBeli(parseInt(e.target.value, 10) || 0)}
+                  className="w-full pl-7 pr-1 text-sm font-bold text-slate-900 border-b border-slate-300 py-1 focus:border-teal-700 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-700">Harga Jual</label>
+                <Calculator className="w-3.5 h-3.5 text-teal-700" />
+              </div>
+              <div className="relative">
+                <span className="absolute left-1 top-1 text-xs text-slate-400">Rp</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="500"
+                  value={hargaJual}
+                  onChange={(e) => setHargaJual(parseInt(e.target.value, 10) || 0)}
+                  className="w-full pl-7 pr-1 text-sm font-bold text-slate-900 border-b border-slate-300 py-1 focus:border-teal-700 focus:outline-hidden"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Batas Stok Minimum (Safety Stock) */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Batas Kuantitas Minimum (Peringatan Stok Tipis)
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={minStock}
+              onChange={(e) => setMinStock(parseInt(e.target.value, 10) || 5)}
+              className="w-32 text-sm font-semibold text-slate-800 border-b border-slate-300 py-1 px-1 focus:border-teal-700 focus:outline-hidden"
+            />
+          </div>
+
+          {/* 8. Foto Produk (Upload / Preview) (Matching StoDo Screenshot 22.16.52) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Foto Produk</label>
+            {fotoUrl ? (
+              <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 group">
+                <img src={fotoUrl} alt="Preview Produk" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setFotoUrl("")}
+                  className="absolute top-2 right-2 p-1.5 bg-rose-600 text-white rounded-full shadow-md hover:bg-rose-700 active:scale-95 transition-all"
+                  title="Hapus Foto"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-teal-300/80 rounded-2xl p-5 flex flex-col items-center justify-center space-y-3 bg-teal-50/20 hover:bg-teal-50/40 transition-colors">
+                <div className="flex items-center space-x-3">
+                  {/* Upload via Camera / File */}
+                  <label className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white border border-teal-600 text-teal-700 font-semibold text-xs shadow-xs hover:bg-teal-50 cursor-pointer active:scale-95 transition-all">
+                    <Camera className="w-4 h-4" />
+                    <span>Ambil Foto</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <label className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white border border-teal-600 text-teal-700 font-semibold text-xs shadow-xs hover:bg-teal-50 cursor-pointer active:scale-95 transition-all">
+                    <ImageIcon className="w-4 h-4" />
+                    <span>Dari Galeri</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <span className="text-[11px] text-slate-400">
+                  Format JPG, PNG, atau WebP (Disimpan ke Cloud)
+                </span>
+              </div>
+            )}
           </div>
         </form>
+
+        {/* Sticky Footer Save Button */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end space-x-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-200 text-xs font-semibold transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="px-5 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 active:scale-95 text-white font-bold text-xs shadow-md transition-all flex items-center space-x-1.5"
+          >
+            <Check className="w-4 h-4" />
+            <span>Simpan Barang</span>
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,126 +1,126 @@
 "use client";
 
 import React, { useState } from "react";
-import { BookOpen, Camera, Sparkles, ClipboardCheck, Search, X, Plus } from "lucide-react";
+import { Menu, ScanLine, Mic, ChevronDown, Warehouse as WarehouseIcon, Sparkles } from "lucide-react";
+import { Warehouse } from "@/types/stock";
 
 interface HeaderProps {
-  totalSku: number;
-  criticalCount: number;
+  onOpenDrawer: () => void;
   onOpenScanner: () => void;
-  onOpenOpname: () => void;
-  onOpenAIConsultant: () => void;
-  onOpenCreateProduct: () => void;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
+  onOpenVoiceAI: () => void;
+  warehouses: Warehouse[];
+  activeWarehouse: Warehouse;
+  onSelectWarehouse: (id: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  totalSku,
-  criticalCount,
+  onOpenDrawer,
   onOpenScanner,
-  onOpenOpname,
-  onOpenAIConsultant,
-  onOpenCreateProduct,
-  searchQuery,
-  onSearchChange,
+  onOpenVoiceAI,
+  warehouses,
+  activeWarehouse,
+  onSelectWarehouse,
 }) => {
-  const [showSearch, setShowSearch] = useState(false);
+  const [isWarehouseDropdownOpen, setIsWarehouseDropdownOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md">
-      {/* Top Bar */}
-      <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-inner">
-            <BookOpen className="w-5 h-5 text-white" />
-          </div>
+    <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80 shadow-xs">
+      <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        {/* Left: Drawer Hamburger & Brand */}
+        <div className="flex items-center space-x-3">
+          <button
+            type="button"
+            onClick={onOpenDrawer}
+            className="p-2 rounded-xl text-slate-700 hover:bg-slate-100 active:scale-95 transition-all"
+            aria-label="Open Menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-base tracking-tight">MM Smart Stock</span>
-              <span className="text-[10px] bg-blue-500/30 text-blue-300 font-mono px-1.5 py-0.5 rounded border border-blue-400/30">
-                Kwarto
+              <span className="font-bold text-lg text-slate-900 tracking-tight">
+                MM Smart Stock
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">
-              {totalSku} SKU •{" "}
-              {criticalCount > 0 ? (
-                <span className="text-rose-400 font-semibold">{criticalCount} Kritis</span>
-              ) : (
-                <span className="text-emerald-400">Semua Aman</span>
+
+            {/* Warehouse Selector Pill (Matching Reference) */}
+            <div className="relative mt-0.5">
+              <button
+                type="button"
+                onClick={() => setIsWarehouseDropdownOpen(!isWarehouseDropdownOpen)}
+                className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-800 text-teal-50 hover:bg-teal-900 transition-colors shadow-xs"
+              >
+                <WarehouseIcon className="w-3 h-3 text-teal-300" />
+                <span className="truncate max-w-[130px]">{activeWarehouse.name}</span>
+                <ChevronDown className="w-3 h-3 text-teal-300" />
+              </button>
+
+              {/* Warehouse Dropdown Menu */}
+              {isWarehouseDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsWarehouseDropdownOpen(false)}
+                  />
+                  <div className="absolute left-0 mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95">
+                    <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      Pilih Lokasi Gudang
+                    </div>
+                    {warehouses.map((w) => (
+                      <button
+                        key={w.id}
+                        onClick={() => {
+                          onSelectWarehouse(w.id);
+                          setIsWarehouseDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-teal-50/80 transition-colors ${
+                          w.id === activeWarehouse.id ? "text-teal-800 font-bold bg-teal-50/50" : "text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 truncate">
+                          <WarehouseIcon className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span className="truncate">{w.name}</span>
+                        </div>
+                        {w.is_default && (
+                          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                            Utama
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
-            </p>
+            </div>
           </div>
         </div>
 
-        {/* Quick Action Buttons */}
+        {/* Right: Quick Actions (Voice Note AI & Barcode Scanner) */}
         <div className="flex items-center space-x-1.5">
+          {/* Voice AI Shortcut */}
           <button
-            onClick={onOpenCreateProduct}
-            aria-label="Tambah produk baru"
-            className="p-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow active:scale-95 transition-transform"
-            title="Tambah SKU Baru"
+            type="button"
+            onClick={onOpenVoiceAI}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200/80 hover:bg-amber-100 active:scale-95 transition-all text-xs font-semibold shadow-xs"
+            title="Input Suara AI"
           >
-            <Plus className="w-5 h-5" />
+            <Mic className="w-4 h-4 text-amber-600" />
+            <Sparkles className="w-3 h-3 text-amber-500" />
+            <span className="hidden sm:inline">Voice AI</span>
           </button>
 
+          {/* Barcode Scanner Shortcut */}
           <button
-            onClick={() => setShowSearch(!showSearch)}
-            aria-label="Cari barang"
-            className="p-2 rounded-full hover:bg-slate-800 text-slate-300 active:scale-95 transition-transform"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-
-          <button
+            type="button"
             onClick={onOpenScanner}
-            aria-label="Scan barcode kamera"
-            className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 active:scale-95 transition-transform relative"
+            className="p-2 rounded-xl text-slate-700 hover:bg-slate-100 active:scale-95 transition-all border border-slate-200 shadow-xs"
+            title="Scan Barcode"
           >
-            <Camera className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={onOpenOpname}
-            aria-label="Stock opname"
-            className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 active:scale-95 transition-transform"
-          >
-            <ClipboardCheck className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={onOpenAIConsultant}
-            aria-label="AI Konsultan"
-            className="p-2 rounded-full bg-gradient-to-tr from-indigo-600 to-blue-500 text-white shadow active:scale-95 transition-transform"
-          >
-            <Sparkles className="w-5 h-5" />
+            <ScanLine className="w-5 h-5 text-teal-700" />
           </button>
         </div>
       </div>
-
-      {/* Expandable Search Input */}
-      {showSearch && (
-        <div className="max-w-md mx-auto px-4 pb-3">
-          <div className="relative flex items-center">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Cari nama barang, SKU, atau rak..."
-              autoFocus
-              className="w-full bg-slate-800 text-white text-sm pl-9 pr-9 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500 placeholder-slate-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => onSearchChange("")}
-                className="absolute right-2.5 p-1 text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </header>
   );
 };

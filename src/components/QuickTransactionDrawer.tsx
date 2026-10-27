@@ -50,10 +50,11 @@ export const QuickTransactionDrawer: React.FC<QuickTransactionDrawerProps> = ({
   const handleVoiceParsed = (result: VoiceParseResult) => {
     // HUMAN-IN-THE-LOOP: Hanya mengisi nilai form untuk direview manusia
     if (result.sku) {
+      const skuQuery = (result.sku || "").toLowerCase();
       const match = allSkus.find(
         (s) =>
-          s.kode_sku.toLowerCase() === result.sku.toLowerCase() ||
-          s.barcode.toLowerCase() === result.sku.toLowerCase()
+          s.kode_sku.toLowerCase() === skuQuery ||
+          s.barcode.toLowerCase() === skuQuery
       );
       if (match) setSelectedSkuId(match.id);
     }
