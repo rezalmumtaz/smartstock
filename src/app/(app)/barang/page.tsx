@@ -7,9 +7,35 @@ import { WarehousePicker } from "@/components/AppShell";
 import { IconBox, IconDoc, IconDownload, IconPin, IconPlus, IconPrinter, IconScan, IconSearch, IconUpload } from "@/components/icons";
 import { cx, Empty, Spinner, useToast } from "@/components/ui";
 import { useActiveWarehouseIds, useApp } from "@/lib/app-context";
-import { isLow, loadCatalog, locationLabel, qtyIn, type Catalog } from "@/lib/data";
+import { lastChangedAt, loadCatalog, locationLabel, qtyIn, stockStatus, type Catalog } from "@/lib/data";
 import { downloadXlsx } from "@/lib/excel";
 import { fmtQty, fmtRp } from "@/lib/format";
+
+type StockFilter = "all" | "tersedia" | "menipis" | "habis";
+const STOCK_FILTERS: StockFilter[] = ["all", "tersedia", "menipis", "habis"];
+
+const SORTS = [
+  { id: "nama-az", label: "Nama A–Z" },
+  { id: "nama-za", label: "Nama Z–A" },
+  { id: "stok-banyak", label: "Stok terbanyak" },
+  { id: "stok-sedikit", label: "Stok tersedikit" },
+  { id: "terakhir-diubah", label: "Terakhir diubah" },
+  { id: "terbaru", label: "Terbaru ditambah" },
+  { id: "harga-tinggi", label: "Harga tertinggi", ownerOnly: true },
+  { id: "harga-rendah", label: "Harga terendah", ownerOnly: true },
+] as const;
+type SortId = (typeof SORTS)[number]["id"];
+const SORT_KEY = "ss.barangSort";
+
+function readSort(): SortId {
+  try {
+    const v = localStorage.getItem(SORT_KEY);
+    if (SORTS.some((s) => s.id === v)) return v as SortId;
+  } catch { /* abaikan */ }
+  return "nama-az";
+}
+
+const byName = (a: string, b: string) => a.localeCompare(b, "id", { numeric: true, sensitivity: "base" });
 
 export default function BarangPage() {
   return <Suspense fallback={<Spinner />}><BarangList /></Suspense>;
@@ -23,27 +49,75 @@ function BarangList() {
   const toast = useToast();
   const [cat, setCat] = useState<Catalog | null>(null);
   const [q, setQ] = useState(params.get("q") ?? "");
-  const [filter, setFilter] = useState<string>(params.get("filter") ?? "all");
+  // ?filter= dari tautan lama bisa berisi status stok ("menipis") atau id grup.
+  const initialFilter = params.get("filter") ?? "all";
+  const [stockFilter, setStockFilter] = useState<StockFilter>(STOCK_FILTERS.includes(initialFilter as StockFilter) ? (initialFilter as StockFilter) : "all");
+  const [group, setGroup] = useState<string>(params.get("grup") ?? (STOCK_FILTERS.includes(initialFilter as StockFilter) ? "all" : initialFilter));
+  const [sort, setSortState] = useState<SortId>("nama-az");
+
+  // Urutan terakhir diingat per perangkat.
+  useEffect(() => setSortState(readSort()), []);
+  function setSort(v: SortId) {
+    setSortState(v);
+    try { localStorage.setItem(SORT_KEY, v); } catch { /* abaikan */ }
+  }
+  const sortOptions = SORTS.filter((o) => !("ownerOnly" in o) || isOwner);
+  const effectiveSort: SortId = sortOptions.some((o) => o.id === sort) ? sort : "nama-az";
 
   useEffect(() => {
     if (!tenant) return;
     loadCatalog(tenant.id, isOwner).then(setCat).catch((e) => toast(String(e.message ?? e), "err"));
   }, [tenant, isOwner, toast]);
 
-  const rows = useMemo(() => {
+  // Barang setelah filter kategori + kata kunci (dasar hitungan tiap tombol stok).
+  const base = useMemo(() => {
     if (!cat) return [];
     const term = q.trim().toLowerCase();
     return cat.items
-      .map((it) => ({ it, qty: qtyIn(cat, it.id, whIds), loc: locationLabel(cat, it.id, whIds, warehouseNames) }))
-      .filter(({ it, qty, loc }) => {
-        if (filter === "menipis" && !isLow(it, qty)) return false;
-        if (filter !== "all" && filter !== "menipis" && it.group_id !== filter) return false;
+      .map((it) => {
+        const qty = qtyIn(cat, it.id, whIds);
+        return { it, qty, status: stockStatus(it, qty), loc: locationLabel(cat, it.id, whIds, warehouseNames) };
+      })
+      .filter(({ it, loc }) => {
+        if (group === "none" ? it.group_id : group !== "all" && it.group_id !== group) return false;
         if (!term) return true;
         return [it.name, it.code, it.barcode, loc].some((v) => v?.toLowerCase().includes(term));
       });
-  }, [cat, q, filter, whIds, warehouseNames]);
+  }, [cat, q, group, whIds, warehouseNames]);
 
-  const lowCount = useMemo(() => cat ? cat.items.filter((it) => isLow(it, qtyIn(cat, it.id, whIds))).length : 0, [cat, whIds]);
+  const counts = useMemo(() => ({
+    all: base.length,
+    tersedia: base.filter((r) => r.qty > 0).length,
+    menipis: base.filter((r) => r.status === "menipis").length,
+    habis: base.filter((r) => r.status === "habis").length,
+  }), [base]);
+
+  const rows = useMemo(() => {
+    if (!cat) return [];
+    const list = base.filter((r) =>
+      stockFilter === "all" ? true : stockFilter === "tersedia" ? r.qty > 0 : r.status === stockFilter);
+    const price = (id: string) => cat.prices[id]?.sell_price;
+    const cmp = (a: (typeof list)[number], b: (typeof list)[number]): number => {
+      switch (effectiveSort) {
+        case "nama-za": return byName(b.it.name, a.it.name);
+        case "stok-banyak": return b.qty - a.qty;
+        case "stok-sedikit": return a.qty - b.qty;
+        case "terakhir-diubah": return lastChangedAt(cat, b.it, whIds) - lastChangedAt(cat, a.it, whIds);
+        case "terbaru": return (Date.parse(b.it.created_at ?? "") || 0) - (Date.parse(a.it.created_at ?? "") || 0);
+        case "harga-tinggi":
+        case "harga-rendah": {
+          const pa = price(a.it.id), pb = price(b.it.id);
+          if (pa === undefined || pb === undefined) return pa === pb ? 0 : pa === undefined ? 1 : -1; // tanpa harga di bawah
+          return effectiveSort === "harga-tinggi" ? pb - pa : pa - pb;
+        }
+        default: return 0;
+      }
+    };
+    return [...list].sort((a, b) =>
+      // Barang nonaktif selalu di bawah, lalu urutan pilihan, lalu nama A–Z sebagai penentu.
+      Number(a.it.is_active === false) - Number(b.it.is_active === false) || cmp(a, b) || byName(a.it.name, b.it.name));
+  }, [cat, base, stockFilter, effectiveSort, whIds]);
+
   const totalUnits = rows.reduce((s, r) => s + r.qty, 0);
   const whLabel = warehouseFilter === "all" ? "Semua gudang" : warehouseNames[warehouseFilter];
 
@@ -85,7 +159,7 @@ function BarangList() {
           </div>
         </div>
         <div className="flex flex-col gap-2 lg:flex-row">
-          <div className="flex flex-1 gap-2">
+          <div className="flex flex-1 gap-2 lg:min-w-[15rem]">
             <label className="flex h-11 flex-1 items-center gap-2 rounded-xl2 border border-line bg-canvas px-3">
               <IconSearch size={18} className="text-ink-muted" />
               <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, kode, barcode, lokasi" aria-label="Cari barang"
@@ -93,40 +167,54 @@ function BarangList() {
             </label>
             <button onClick={() => router.push("/scan?cari=1")} aria-label="Scan barcode untuk mencari" className="flex h-11 w-11 items-center justify-center rounded-xl2 bg-brand text-white"><IconScan size={19} /></button>
           </div>
-          <div className="lg:w-64"><WarehousePicker /></div>
+          <div className="lg:w-52 lg:flex-none"><WarehousePicker /></div>
+          {/* Kategori + urutan sejajar (di HP dua kolom, hemat tempat). */}
+          <div className="grid grid-cols-2 gap-2 lg:w-[24rem] lg:flex-none">
+            <MiniSelect label="Kategori" value={group} onChange={(v) => v === "__kelola" ? router.push("/pengaturan/grup") : setGroup(v)}>
+              <option value="all">Semua kategori</option>
+              {cat?.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              <option value="none">Tanpa kategori</option>
+              {canEditMaster ? <option value="__kelola">＋ Kelola grup…</option> : null}
+            </MiniSelect>
+            <MiniSelect label="Urutkan" value={effectiveSort} onChange={(v) => setSort(v as SortId)}>
+              {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </MiniSelect>
+          </div>
         </div>
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:mx-0 lg:px-0">
-          <Chip active={filter === "all"} onClick={() => setFilter("all")}>Semua · {cat?.items.length ?? 0}</Chip>
-          <Chip active={filter === "menipis"} warn onClick={() => setFilter("menipis")}>Stok menipis · {lowCount}</Chip>
-          {cat?.groups.map((g) => <Chip key={g.id} active={filter === g.id} onClick={() => setFilter(g.id)}>{g.name}</Chip>)}
-          {canEditMaster ? <Link href="/pengaturan/grup" className="flex h-9 flex-none items-center rounded-full border border-dashed border-line-strong px-3 text-[13px] font-semibold text-brand">Kelola grup</Link> : null}
+          <Chip active={stockFilter === "all"} onClick={() => setStockFilter("all")}>Semua · {counts.all}</Chip>
+          <Chip active={stockFilter === "tersedia"} tone="ok" onClick={() => setStockFilter("tersedia")}>Stok tersedia · {counts.tersedia}</Chip>
+          <Chip active={stockFilter === "menipis"} tone="warn" onClick={() => setStockFilter("menipis")}>Stok menipis · {counts.menipis}</Chip>
+          <Chip active={stockFilter === "habis"} tone="bad" onClick={() => setStockFilter("habis")}>Stok habis · {counts.habis}</Chip>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-5xl lg:px-6 lg:py-4">
         {!cat ? <Spinner /> : rows.length === 0 ? (
           <Empty icon={<IconBox />} title={cat.items.length ? "Barang tidak ditemukan" : "Belum ada barang"}>
-            {cat.items.length || !canEditMaster ? (cat.items.length ? "Coba kata kunci lain atau ubah filter." : "Belum ada barang.") : <>Tambah barang satu per satu, atau <Link href="/impor" className="font-bold text-brand">impor dari Excel</Link> sekaligus.</>}
+            {cat.items.length || !canEditMaster ? (cat.items.length ? "Coba kata kunci lain, kategori lain, atau ubah filter stok." : "Belum ada barang.") : <>Tambah barang satu per satu, atau <Link href="/impor" className="font-bold text-brand">impor dari Excel</Link> sekaligus.</>}
           </Empty>
         ) : (
           <div className="overflow-hidden bg-white lg:rounded-2xl lg:border lg:border-line">
             <div className="flex justify-between px-4 pb-1.5 pt-2.5 text-xs font-semibold text-ink-muted">
               <span>NAMA BARANG</span><span>STOK</span>
             </div>
-            {rows.map(({ it, qty, loc }) => {
-              const low = isLow(it, qty);
+            {rows.map(({ it, qty, loc, status }) => {
               return (
                 <Link key={it.id} href={`/barang/${it.id}`} className="flex items-center gap-3 border-t border-[#EEF0F3] px-4 py-3 active:bg-canvas lg:hover:bg-canvas">
                   <span className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-[10px] bg-[#F2F4F7] text-[#98A2B3]">
                     {it.image_urls?.[0] ? <img src={it.image_urls[0]} alt="" className="h-full w-full bg-white object-contain" /> : <IconBox size={20} />}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-sm font-semibold">{it.name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-semibold">{it.name}</span>
+                      {it.is_active === false ? <span className="flex-none rounded-full bg-[#F2F4F7] px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">Nonaktif</span> : null}
+                    </span>
                     <span className="truncate text-xs text-ink-muted">{[it.code, it.barcode].filter(Boolean).join(" · ") || "Tanpa kode"}{isOwner && cat.prices[it.id] ? ` · ${fmtRp(cat.prices[it.id].sell_price)}` : ""}</span>
                     {loc ? <span className="flex min-w-0 items-center gap-1 text-xs font-semibold text-indigo"><IconPin size={12} className="flex-none" /><span className="truncate">{loc}</span></span> : null}
                   </span>
                   <span className="flex flex-col items-end gap-0.5">
-                    <span className={cx("text-[15px] font-bold", low && "text-warn")}>{fmtQty(qty)}</span>
+                    <span className={cx("text-[15px] font-bold", status === "menipis" && "text-warn", status === "habis" && "text-danger")}>{fmtQty(qty)}</span>
                     <span className="text-[11px] text-ink-muted">{it.unit ?? ""}{it.min_qty ? ` · min ${fmtQty(it.min_qty)}` : ""}</span>
                   </span>
                 </Link>
@@ -144,12 +232,31 @@ function BarangList() {
   );
 }
 
-function Chip({ active, warn, onClick, children }: { active: boolean; warn?: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({ active, tone, onClick, children }: { active: boolean; tone?: "ok" | "warn" | "bad"; onClick: () => void; children: React.ReactNode }) {
+  const styles = {
+    none: ["border-ink bg-ink text-white", "border-line bg-white text-ink-2"],
+    ok: ["border-brand bg-brand text-white", "border-line bg-white text-ink-2"],
+    warn: ["border-warn bg-warn text-white", "border-[#F5C98B] bg-warn-soft text-warn"],
+    bad: ["border-danger bg-danger text-white", "border-[#FECDCA] bg-danger-soft text-danger"],
+  }[tone ?? "none"];
   return (
-    <button onClick={onClick}
-      className={cx("h-9 flex-none whitespace-nowrap rounded-full border px-3.5 text-[13px] font-semibold",
-        active ? (warn ? "border-warn bg-warn text-white" : "border-ink bg-ink text-white") : warn ? "border-[#F5C98B] bg-warn-soft text-warn" : "border-line bg-white text-ink-2")}>
+    <button onClick={onClick} aria-pressed={active}
+      className={cx("h-9 flex-none whitespace-nowrap rounded-full border px-3.5 text-[13px] font-semibold", active ? styles[0] : styles[1])}>
       {children}
     </button>
+  );
+}
+
+/** Dropdown ringkas dengan label kecil di atas nilai (kategori & urutan). */
+function MiniSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+  return (
+    <label className="relative flex h-11 min-w-0 flex-col justify-center rounded-xl2 border border-line bg-canvas pl-3 pr-7">
+      <span className="text-[10px] font-semibold uppercase leading-none tracking-wide text-ink-muted">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}
+        className="mt-0.5 w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent text-[13px] font-semibold leading-tight outline-none">
+        {children}
+      </select>
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5D6679" strokeWidth="2" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"><path d="M6 9l6 6 6-6" /></svg>
+    </label>
   );
 }

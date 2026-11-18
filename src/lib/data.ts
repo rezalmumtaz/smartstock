@@ -25,6 +25,8 @@ export interface Catalog {
   prices: Record<string, ItemPrice>;
   /** lokasi simpan: locations[itemId][warehouseId] */
   locations: Record<string, Record<string, string>>;
+  /** waktu stok terakhir bergerak: stockUpdated[itemId][warehouseId] (ISO) */
+  stockUpdated: Record<string, Record<string, string>>;
 }
 
 export async function loadCatalog(tenantId: string, withPrices: boolean): Promise<Catalog> {
@@ -32,19 +34,23 @@ export async function loadCatalog(tenantId: string, withPrices: boolean): Promis
   const [items, groups, levels, prices, locs] = await Promise.all([
     fetchAll<Item>((a, b) => sb.from("items").select("*").eq("tenant_id", tenantId).eq("is_active", true).order("name").range(a, b)),
     fetchAll<ItemGroup>((a, b) => sb.from("item_groups").select("id, name").eq("tenant_id", tenantId).order("name").range(a, b)),
-    fetchAll<StockLevel>((a, b) => sb.from("stock_levels").select("item_id, warehouse_id, qty").eq("tenant_id", tenantId).range(a, b)),
+    fetchAll<StockLevel>((a, b) => sb.from("stock_levels").select("item_id, warehouse_id, qty, updated_at").eq("tenant_id", tenantId).range(a, b)),
     withPrices
       ? fetchAll<ItemPrice>((a, b) => sb.from("item_prices").select("item_id, purchase_price, sell_price").eq("tenant_id", tenantId).range(a, b))
       : Promise.resolve([] as ItemPrice[]),
     fetchAll<ItemLocation>((a, b) => sb.from("item_locations").select("item_id, warehouse_id, location").eq("tenant_id", tenantId).range(a, b)).catch(() => [] as ItemLocation[]),
   ]);
   const stock: Catalog["stock"] = {};
-  for (const l of levels) (stock[l.item_id] ??= {})[l.warehouse_id] = Number(l.qty);
+  const stockUpdated: Catalog["stockUpdated"] = {};
+  for (const l of levels) {
+    (stock[l.item_id] ??= {})[l.warehouse_id] = Number(l.qty);
+    if (l.updated_at) (stockUpdated[l.item_id] ??= {})[l.warehouse_id] = l.updated_at;
+  }
   const priceMap: Catalog["prices"] = {};
   for (const p of prices) priceMap[p.item_id] = { ...p, purchase_price: Number(p.purchase_price), sell_price: Number(p.sell_price) };
   const locations: Catalog["locations"] = {};
   for (const l of locs) (locations[l.item_id] ??= {})[l.warehouse_id] = l.location;
-  return { items, groups, stock, prices: priceMap, locations };
+  return { items, groups, stock, prices: priceMap, locations, stockUpdated };
 }
 
 export function qtyIn(cat: Catalog, itemId: string, warehouseIds: string[]): number {
@@ -55,6 +61,28 @@ export function qtyIn(cat: Catalog, itemId: string, warehouseIds: string[]): num
 
 export function isLow(item: Item, qty: number): boolean {
   return item.min_qty !== null && item.min_qty !== undefined && Number(item.min_qty) > 0 && qty < Number(item.min_qty);
+}
+
+/** Status stok untuk filter di halaman Barang. */
+export type StockStatus = "tersedia" | "menipis" | "habis";
+
+/**
+ * Habis: stok ≤ 0. Menipis: stok minimal diisi (> 0) dan 0 < stok ≤ minimal.
+ * Selain itu tersedia. Barang menipis juga termasuk "tersedia" (stoknya masih ada).
+ */
+export function stockStatus(item: Item, qty: number): StockStatus {
+  if (qty <= 0) return "habis";
+  const min = Number(item.min_qty ?? 0);
+  if (min > 0 && qty <= min) return "menipis";
+  return "tersedia";
+}
+
+/** Waktu terakhir barang berubah: data barang diedit atau stok terakhir bergerak di gudang yang dilihat. */
+export function lastChangedAt(cat: Catalog, item: Item, warehouseIds: string[]): number {
+  let t = item.updated_at ? Date.parse(item.updated_at) : 0;
+  const s = cat.stockUpdated[item.id];
+  if (s) for (const w of warehouseIds) if (s[w]) t = Math.max(t, Date.parse(s[w]));
+  return t;
 }
 
 /**

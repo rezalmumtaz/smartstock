@@ -47,6 +47,8 @@ export interface Item {
   min_qty: number | null;
   is_active: boolean;
   image_urls: string[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ItemPrice {
@@ -59,6 +61,7 @@ export interface StockLevel {
   item_id: string;
   warehouse_id: string;
   qty: number;
+  updated_at?: string;
 }
 
 export interface Contact {
