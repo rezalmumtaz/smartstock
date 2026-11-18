@@ -1,28 +1,33 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Providers from "./providers";
+
 
 export const metadata: Metadata = {
-  title: "MM Smart Stock — Buku Kartu Stok Kwarto Digital & AI",
-  description: "SaaS Manajemen Stok Barang Gudang UMKM Berbasis Event Sourcing & AI Multimodal",
+  title: "Smart Stock",
+  description: "Stok gudang multi-gudang untuk tim di lapangan",
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/icons/mm-favicon.png", apple: "/icons/mm-apple-180.png" },
+  appleWebApp: { capable: true, title: "Smart Stock", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
+  themeColor: "#0E7C66",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id">
-      <body className="antialiased min-h-screen bg-slate-100 text-slate-900 pb-28">
-        {children}
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+      </head>
+      <body className="font-sans antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

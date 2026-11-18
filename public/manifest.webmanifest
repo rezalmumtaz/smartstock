@@ -1,0 +1,32 @@
+{
+  "name": "Smart Stock",
+  "short_name": "Smart Stock",
+  "description": "Stok gudang multi-gudang untuk tim di lapangan",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0E7C66",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "/icons/mm-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/mm-maskable-512.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/mm-maskable-512.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "maskable"
+    }
+  ]
+}
