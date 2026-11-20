@@ -124,7 +124,7 @@ export default function KatalogPage() {
   return (
     <>
       <PageHeader title="Katalog digital" subtitle={`${entries.length} barang dipilih`} back="/barang" />
-      <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-4 pb-36 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-6">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-4 py-4 pb-36 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-6">
         <div className="flex min-w-0 flex-col gap-4">
           <Card className="flex flex-col gap-3">
             <h2 className="text-sm font-bold">1. Pilih barang</h2>

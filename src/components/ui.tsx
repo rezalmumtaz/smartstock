@@ -37,11 +37,11 @@ export function Field({ label, hint, children, htmlFor }: { label: string; hint?
 }
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...rest} className={cx("h-12 w-full rounded-xl2 border border-line-strong bg-white px-3 text-[15px] text-ink outline-none placeholder:text-[#98A2B3] focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-canvas", className)} />;
+  return <input {...rest} className={cx("h-12 w-full min-w-0 rounded-xl2 border border-line-strong bg-white px-3 text-[15px] text-ink outline-none placeholder:text-[#98A2B3] focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-canvas", className)} />;
 }
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...rest} className={cx("h-12 w-full rounded-xl2 border border-line-strong bg-white px-3 text-[15px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20", className)}>{children}</select>;
+  return <select {...rest} className={cx("h-12 w-full min-w-0 rounded-xl2 border border-line-strong bg-white px-3 text-[15px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20", className)}>{children}</select>;
 }
 
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {

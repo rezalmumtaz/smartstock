@@ -143,8 +143,8 @@ function LabelEditor() {
   return (
     <>
       <PageHeader title="Cetak label barcode" subtitle={`${labels.length} label · ${selected.length} barang`} back="/barang" />
-      <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-4 pb-32 lg:grid-cols-[1fr_380px] lg:px-6 lg:pb-8">
-        <div className="flex flex-col gap-4">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-4 py-4 pb-32 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-6 lg:pb-8">
+        <div className="flex min-w-0 flex-col gap-4">
           {noBarcode ? (
             <Card className="flex items-start gap-3 border-warn/30 bg-warn-soft">
               <IconAlert className="mt-0.5 flex-none text-warn" />
@@ -191,7 +191,7 @@ function LabelEditor() {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card className="flex flex-col gap-3">
             <h2 className="text-sm font-bold">2. Ukuran label & printer</h2>
             <Field label="Template" htmlFor="tpl">
