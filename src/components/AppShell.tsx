@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useApp } from "@/lib/app-context";
-import { IconBox, IconChart, IconDoc, IconHome, IconLogout, IconMenu, IconPrinter, IconScan, IconSettings, IconTransfer, IconUpload, IconWarehouse } from "./icons";
+import { IconBox, IconCatalog, IconChart, IconDoc, IconHome, IconLogout, IconMenu, IconPrinter, IconScan, IconSettings, IconTransfer, IconUpload, IconWarehouse } from "./icons";
 import { cx, Spinner } from "./ui";
 import { blockedFor, ROLE_LABEL } from "@/lib/access";
 
@@ -15,11 +15,19 @@ const NAV = [
   { href: "/laporan", label: "Laporan", icon: IconChart },
 ];
 
-/** Bottom nav HP: Laporan & pengaturan pindah ke tab Menu. */
+/** Bottom nav HP: Katalog langsung di bar; Dokumen, Laporan & pengaturan lewat tab Menu. */
 const MOBILE_NAV = [
-  NAV[0], NAV[1], NAV[2],
-  { href: "/menu", label: "Menu", icon: IconMenu, match: ["/menu", "/laporan", "/pengaturan"] },
+  NAV[0],
+  { ...NAV[1], exclude: ["/barang/katalog"] },
+  { href: "/barang/katalog", label: "Katalog", icon: IconCatalog },
+  { href: "/menu", label: "Menu", icon: IconMenu, match: ["/menu", "/dokumen", "/laporan", "/pengaturan"] },
 ];
+
+/** Aktif bila cocok dengan href/match, kecuali halaman yang dikecualikan (mis. Katalog di bawah /barang). */
+function navActive(path: string, n: { href: string; match?: string[]; exclude?: string[] }) {
+  if (n.exclude?.some((x) => isActive(path, x))) return false;
+  return n.match ? n.match.some((m) => isActive(path, m)) : isActive(path, n.href);
+}
 
 function isActive(path: string, href: string) {
   return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
@@ -84,11 +92,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {/* Bottom nav mobile */}
       <nav aria-label="Navigasi utama" className={cx("pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white lg:hidden", focusMode && "hidden")}>
         <div className="mx-auto flex h-[68px] max-w-lg items-start justify-around px-2 pt-2">
-          {MOBILE_NAV.slice(0, 2).map((n) => <NavItem key={n.href} {...n} active={isActive(path, n.href)} />)}
+          {MOBILE_NAV.slice(0, 2).map((n) => <NavItem key={n.href} href={n.href} label={n.label} icon={n.icon} active={navActive(path, n)} />)}
           <Link href="/scan" aria-label="Scan barcode" className="-mt-6 flex h-14 w-14 items-center justify-center rounded-[18px] border-4 border-canvas bg-brand text-white shadow-md">
             <IconScan size={24} />
           </Link>
-          {MOBILE_NAV.slice(2).map((n) => <NavItem key={n.href} {...n} active={"match" in n && n.match ? n.match.some((m) => isActive(path, m)) : isActive(path, n.href)} />)}
+          {MOBILE_NAV.slice(2).map((n) => <NavItem key={n.href} href={n.href} label={n.label} icon={n.icon} active={navActive(path, n)} />)}
         </div>
       </nav>
     </div>

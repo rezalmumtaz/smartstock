@@ -41,4 +41,5 @@ export const IconTrash = (p: P) => <svg {...base(p)}><path d="M3 6h18" /><path d
 export const IconFlash = (p: P) => <svg {...base(p)}><path d="M6 2h12v5l-3 4v11H9V11L6 7z" /><path d="M12 14v3" /></svg>;
 export const IconPrinter = (p: P) => <svg {...base(p)}><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M6 14h12v7H6z" /></svg>;
 export const IconMenu = (p: P) => <svg {...base(p)}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>;
+export const IconCatalog = (p: P) => <svg {...base(p)}><path d="M2 5.5C2 4.7 2.7 4 3.5 4H9a3 3 0 013 3v13a2.5 2.5 0 00-2.5-2.5h-6A1.5 1.5 0 012 16z" /><path d="M22 5.5c0-.8-.7-1.5-1.5-1.5H15a3 3 0 00-3 3v13a2.5 2.5 0 012.5-2.5h6a1.5 1.5 0 001.5-1.5z" /><path d="M15.5 8.5h3M15.5 12h3" /></svg>;
 export const IconPin = (p: P) => <svg {...base(p)}><path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>;
