@@ -8,18 +8,74 @@ import { fmtDate, fmtRp, todayISO } from "./format";
 import { stockText, type CatalogEntry, type CatalogOptions } from "./catalog";
 
 type RGB = [number, number, number];
-export type ThemeId = "oranye" | "hijau" | "biru" | "gelap";
-export type Layout = "showcase" | "grid" | "list";
+export type ThemeId =
+  | "oranye" | "hijau" | "biru" | "gelap" | "merah" | "ungu" | "pink" | "toska"
+  | "kuning" | "navy" | "cokelat" | "langit" | "lime" | "marun" | "custom";
+export type Layout = "brosur" | "showcase" | "grid" | "list";
 
 interface Theme { label: string; bg: [string, string]; circle: [string, string]; card: RGB; pill: RGB; accent: RGB; swatch: string }
-export const THEMES: Record<ThemeId, Theme> = {
-  oranye: { label: "Oranye", bg: ["#F29A4E", "#E0523E"], circle: ["#55A9E6", "#2F6FC0"], card: [192, 76, 44], pill: [196, 232, 120], accent: [47, 111, 192], swatch: "linear-gradient(135deg,#F29A4E,#E0523E)" },
-  hijau: { label: "Hijau", bg: ["#22A98B", "#0B5E4D"], circle: ["#F7C04A", "#E58A1A"], card: [9, 78, 64], pill: [168, 240, 214], accent: [229, 138, 26], swatch: "linear-gradient(135deg,#22A98B,#0B5E4D)" },
-  biru: { label: "Biru", bg: ["#3F8CF5", "#1C3D9E"], circle: ["#FDBA4D", "#F2761B"], card: [24, 52, 140], pill: [176, 208, 255], accent: [242, 118, 27], swatch: "linear-gradient(135deg,#3F8CF5,#1C3D9E)" },
-  gelap: { label: "Gelap", bg: ["#343A44", "#121519"], circle: ["#F29A4E", "#E0523E"], card: [30, 34, 40], pill: [242, 154, 78], accent: [224, 82, 62], swatch: "linear-gradient(135deg,#343A44,#121519)" },
+const theme = (label: string, bg: [string, string], circle: [string, string], card: RGB, pill: RGB, accent: RGB): Theme =>
+  ({ label, bg, circle, card, pill, accent, swatch: `linear-gradient(135deg,${bg[0]},${bg[1]})` });
+/** Tema siap pakai. "custom" dibuat dari warna pilihan (lihat themeOf). */
+export const THEMES: Record<Exclude<ThemeId, "custom">, Theme> = {
+  oranye: theme("Oranye", ["#F29A4E", "#E0523E"], ["#55A9E6", "#2F6FC0"], [192, 76, 44], [196, 232, 120], [47, 111, 192]),
+  merah: theme("Merah", ["#EF4B4B", "#B3121F"], ["#FFD25A", "#F29A1F"], [150, 18, 30], [255, 214, 120], [37, 99, 205]),
+  marun: theme("Marun", ["#9E2A3F", "#5A0F1F"], ["#F4C860", "#D99A1E"], [80, 14, 28], [244, 200, 96], [217, 154, 30]),
+  pink: theme("Pink", ["#F772A8", "#C42A72"], ["#7DD3FC", "#2B8FD8"], [160, 30, 92], [255, 214, 236], [43, 143, 216]),
+  ungu: theme("Ungu", ["#9A6CF0", "#4C24A8"], ["#FFC857", "#F28E1C"], [66, 30, 140], [222, 205, 255], [242, 142, 28]),
+  biru: theme("Biru", ["#3F8CF5", "#1C3D9E"], ["#FDBA4D", "#F2761B"], [24, 52, 140], [176, 208, 255], [242, 118, 27]),
+  langit: theme("Langit", ["#5BC0F0", "#1F78C8"], ["#FFD34D", "#F59E0B"], [20, 92, 160], [210, 238, 255], [225, 29, 72]),
+  navy: theme("Navy", ["#25407A", "#0B1736"], ["#F9C74F", "#F3722C"], [12, 26, 64], [249, 199, 79], [243, 114, 44]),
+  toska: theme("Toska", ["#2EC4B6", "#0B7A75"], ["#FF9F68", "#E8590C"], [8, 96, 92], [190, 245, 238], [232, 89, 12]),
+  hijau: theme("Hijau", ["#22A98B", "#0B5E4D"], ["#F7C04A", "#E58A1A"], [9, 78, 64], [168, 240, 214], [229, 138, 26]),
+  lime: theme("Lime", ["#8BC34A", "#3F7D20"], ["#FFE066", "#F4A100"], [52, 100, 26], [230, 250, 190], [214, 40, 40]),
+  kuning: theme("Kuning", ["#F7B731", "#D9730D"], ["#3D8BFD", "#1D4ED8"], [168, 84, 6], [255, 236, 170], [29, 78, 216]),
+  cokelat: theme("Cokelat", ["#B07A4F", "#5E3A22"], ["#F2C14E", "#E07A1F"], [80, 48, 26], [242, 214, 170], [224, 122, 31]),
+  gelap: theme("Gelap", ["#343A44", "#121519"], ["#F29A4E", "#E0523E"], [30, 34, 40], [242, 154, 78], [224, 82, 62]),
 };
 
-export interface DesignOptions { layout: Layout; theme: ThemeId; inkSaver: boolean; cover: boolean }
+export interface DesignOptions {
+  layout: Layout;
+  theme: ThemeId;
+  inkSaver: boolean;
+  cover: boolean;
+  /** Warna utama tema "custom" (mis. warna logo toko), format #rrggbb. */
+  customColor?: string;
+  /** Brosur: jumlah kolom × baris per halaman. */
+  perPage?: BrosurGrid;
+  /** Brosur: teks di depan harga, mis. "CASH" atau "Harga". */
+  priceLabel?: string;
+  /** Brosur: tombol Bagikan mengirim gambar JPG atau PDF. */
+  shareAs?: "jpg" | "pdf";
+}
+export type BrosurGrid = "2x3" | "3x4" | "4x5";
+
+/* ---- warna tema sendiri ---- */
+function hsl(hexColor: string): [number, number, number] {
+  const [r, g, b] = hex(hexColor).map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const dd = max - min, s = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+  const h = max === r ? (g - b) / dd + (g < b ? 6 : 0) : max === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
+  return [h * 60, s, l];
+}
+function hslHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360; s = Math.min(1, Math.max(0, s)); l = Math.min(1, Math.max(0, l));
+  const k = (n: number) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n: number) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
+  return "#" + [f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+/** Tema lengkap dari satu warna (warna logo): latar gradasi, aksen warna pelengkap. */
+export function customTheme(color: string): Theme {
+  const c = /^#[0-9a-f]{6}$/i.test(color) ? color : "#0E7C66";
+  const [h, s0] = hsl(c), s = Math.max(0.45, s0);
+  const comp = h + 160;
+  return theme("Warna logo", [hslHex(h, s, 0.56), hslHex(h, s, 0.3)], [hslHex(comp, 0.85, 0.62), hslHex(comp, 0.85, 0.48)],
+    hex(hslHex(h, s, 0.24)), hex(hslHex(h, s * 0.8, 0.86)), hex(hslHex(comp, 0.8, 0.45)));
+}
+export function themeOf(d: Pick<DesignOptions, "theme" | "customColor">): Theme {
+  return d.theme === "custom" ? customTheme(d.customColor ?? "#0E7C66") : THEMES[d.theme] ?? THEMES.oranye;
+}
 
 const WHITE: RGB = [255, 255, 255];
 const INK: RGB = [24, 28, 33];
@@ -248,17 +304,265 @@ function entrySpecs(e: CatalogEntry, o: CatalogOptions) {
 function groupBy(entries: CatalogEntry[]) {
   const m = new Map<string, CatalogEntry[]>();
   for (const e of entries) { if (!m.has(e.group)) m.set(e.group, []); m.get(e.group)!.push(e); }
-  return [...m.entries()].sort((a, b) => (a[0] || "~").localeCompare(b[0] || "~"));
+  // Grup berurutan A–Z; barang tanpa grup ("Lainnya") selalu paling akhir.
+  return [...m.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0], "id"));
+}
+
+/* ---------------- brosur: banyak barang per halaman ---------------- */
+const BROSUR_GRID: Record<BrosurGrid, [number, number]> = { "2x3": [2, 3], "3x4": [3, 4], "4x5": [4, 5] };
+const BPX = 7; // piksel per mm untuk brosur (±178 dpi): tajam di HP & cukup untuk cetak A4
+const RED = "#D92D20";
+
+let canvasFonts: Promise<boolean> | null = null;
+/** Font katalog untuk canvas (brosur digambar penuh di canvas, termasuk teks). */
+function loadCanvasFonts() {
+  canvasFonts ??= (async () => {
+    try {
+      const faces = [new FontFace("CatBebas", `url(${FONT_FILES.bebas})`), new FontFace("CatPop", `url(${FONT_FILES.reg})`, { weight: "400" }), new FontFace("CatPop", `url(${FONT_FILES.semi})`, { weight: "600" })];
+      for (const f of faces) document.fonts.add(await f.load());
+      return true;
+    } catch { return false; }
+  })();
+  return canvasFonts;
+}
+
+/** Bungkus teks ke maksimal `max` baris; baris terakhir dipotong dengan "…". */
+function wrap(ctx: CanvasRenderingContext2D, text: string, width: number, max: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (ctx.measureText(next).width <= width || !cur) cur = next;
+    else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > max) {
+    const keep = lines.slice(0, max);
+    let last = keep[max - 1];
+    while (last.length > 1 && ctx.measureText(`${last}…`).width > width) last = last.slice(0, -1);
+    keep[max - 1] = `${last}…`;
+    return keep;
+  }
+  return lines.map((l) => { let x = l; while (x.length > 1 && ctx.measureText(x).width > width) x = x.slice(0, -1); return x === l ? l : `${x}…`; });
+}
+
+/** Ambil satu nilai spesifikasi dari deskripsi (format "Label: isi"). */
+function specValue(desc: string | null | undefined, re: RegExp) {
+  return parseDescription(desc).specs.find((sp) => re.test(sp.label))?.value ?? "";
+}
+
+/** Kode label kartu: huruf grup + nomor urut, mis. A01, A02, B01. */
+function badgeCodes(groups: [string, CatalogEntry[]][]) {
+  const out = new Map<CatalogEntry, string>();
+  groups.forEach(([, list], gi) => {
+    const letter = gi < 26 ? String.fromCharCode(65 + gi) : `Z${gi - 25}`;
+    list.forEach((e, i) => out.set(e, `${letter}${String(i + 1).padStart(2, "0")}`));
+  });
+  return out;
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "T";
+}
+
+/**
+ * Brosur A4 tegak berisi banyak barang per halaman (gaya brosur grosir): kartu bernomor dengan nama,
+ * keterangan ukuran (merah), foto, harga, dan isi/stok. Dikembalikan sebagai canvas per halaman.
+ */
+export async function buildBrosurPages(entries: CatalogEntry[], o: CatalogOptions, d: DesignOptions, onProgress?: (done: number, total: number) => void): Promise<HTMLCanvasElement[]> {
+  await loadCanvasFonts();
+  const t = themeOf(d), ink = d.inkSaver;
+  const [cols, rows] = BROSUR_GRID[d.perPage ?? "3x4"];
+  const W = 210, H = 297, M = 8, gap = 3, headH = 34, footH = 9, secH = 8;
+  const top = M + headH + 4, bottom = H - footH - 2;
+  const cw = (W - 2 * M - gap * (cols - 1)) / cols;
+  // Sisakan tempat satu judul grup per halaman supaya baris terakhir tidak terlempar ke halaman berikut.
+  const ch = (bottom - top - secH - gap - gap * (rows - 1)) / rows;
+  const k = cw / 62; // skala huruf terhadap kartu 3 kolom
+  const priceLabel = (d.priceLabel ?? "Harga").trim();
+  const groups = groupBy(entries);
+  const codes = badgeCodes(groups);
+  const cardColor = css(t.card), accent = css(t.accent);
+  const title = (o.title || `Katalog ${o.company}`).toUpperCase();
+  const dateText = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, ".");
+  const pages: HTMLCanvasElement[] = [];
+  let ctx!: CanvasRenderingContext2D;
+  let y = 0, done = 0;
+
+  const newPage = () => {
+    const c = document.createElement("canvas");
+    c.width = Math.round(W * BPX); c.height = Math.round(H * BPX);
+    ctx = c.getContext("2d")!;
+    ctx.imageSmoothingQuality = "high";
+    ctx.scale(BPX, BPX);
+    pages.push(c);
+    // latar halaman
+    drawBackground(ctx, W, H, t, ink);
+    // kepala: panel warna gelap tema
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.25)"; ctx.shadowBlur = 2 * BPX; ctx.shadowOffsetY = 0.6 * BPX;
+    roundRectPath(ctx, M, M, W - 2 * M, headH, 4);
+    ctx.fillStyle = ink ? "#fff" : cardColor; ctx.fill();
+    ctx.restore();
+    if (ink) { ctx.strokeStyle = cardColor; ctx.lineWidth = 0.6; roundRectPath(ctx, M, M, W - 2 * M, headH, 4); ctx.stroke(); }
+    // hiasan diagonal di kepala
+    ctx.save(); roundRectPath(ctx, M, M, W - 2 * M, headH, 4); ctx.clip();
+    ctx.fillStyle = css(t.accent, ink ? 0.12 : 0.9);
+    ctx.beginPath(); ctx.moveTo(W - M - 62, M); ctx.lineTo(W - M, M); ctx.lineTo(W - M, M + headH); ctx.lineTo(W - M - 80, M + headH); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = ink ? css(t.card, 0.06) : "rgba(255,255,255,0.10)";
+    ctx.beginPath(); ctx.moveTo(W - M - 70, M); ctx.lineTo(W - M - 64, M); ctx.lineTo(W - M - 84, M + headH); ctx.lineTo(W - M - 90, M + headH); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // logo inisial
+    const lx = M + 6, ly = M + headH / 2, lr = 10;
+    ctx.fillStyle = ink ? cardColor : "#fff"; ctx.beginPath(); ctx.arc(lx + lr, ly, lr, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ink ? "#fff" : cardColor; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `${lr * 1.05}px CatBebas, sans-serif`; ctx.fillText(initials(o.company), lx + lr, ly + 0.6);
+    // nama toko + kontak
+    const tx = lx + 2 * lr + 4, tw = W - M - 92 - tx;
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = ink ? cardColor : "#fff";
+    let size = 13;
+    ctx.font = `${size}px CatBebas, sans-serif`;
+    while (size > 7 && ctx.measureText(o.company.toUpperCase()).width > tw) { size -= 0.5; ctx.font = `${size}px CatBebas, sans-serif`; }
+    ctx.fillText(o.company.toUpperCase(), tx, ly + (o.contact.trim() ? -0.5 : size * 0.33));
+    if (o.contact.trim()) {
+      ctx.font = `600 3.3px CatPop, sans-serif`; ctx.fillStyle = ink ? css(MUTED) : "rgba(255,255,255,0.85)";
+      ctx.fillText(wrap(ctx, `Pemesanan: ${o.contact.trim()}`, tw, 1)[0], tx, ly + 5.2);
+    }
+    // judul + tanggal di kanan
+    const rx = W - M - 6;
+    ctx.textAlign = "right"; ctx.fillStyle = "#fff";
+    let ts = 11; ctx.font = `${ts}px CatBebas, sans-serif`;
+    const tl = (() => { for (; ts >= 6; ts -= 0.5) { ctx.font = `${ts}px CatBebas, sans-serif`; const l = wrap(ctx, title, 64, 2); if (l.length <= 2 && !l.some((x) => x.endsWith("…"))) return l; } return wrap(ctx, title, 64, 2); })();
+    ctx.fillStyle = ink ? cardColor : "#fff";
+    tl.forEach((l, i) => ctx.fillText(l, rx, M + 12 + i * ts * 0.92));
+    ctx.font = `600 3.4px CatPop, sans-serif`;
+    const dw = ctx.measureText(dateText).width + 5;
+    const dy = M + headH - 9.5;
+    roundRectPath(ctx, rx - dw, dy, dw, 6, 3); ctx.fillStyle = ink ? cardColor : "#fff"; ctx.fill();
+    ctx.fillStyle = ink ? "#fff" : cardColor; ctx.textBaseline = "middle"; ctx.fillText(dateText, rx - 2.5, dy + 3.1);
+    ctx.textBaseline = "alphabetic";
+    // kaki halaman
+    ctx.textAlign = "left"; ctx.font = `600 3.1px CatPop, sans-serif`; ctx.fillStyle = ink ? css(MUTED) : "rgba(255,255,255,0.92)";
+    const foot = [o.note.trim(), o.contact.trim() ? `Pemesanan: ${o.contact.trim()}` : ""].filter(Boolean).join("  ·  ") || o.company;
+    ctx.fillText(wrap(ctx, foot, W - 2 * M - 14, 1)[0], M, H - 5);
+    ctx.textAlign = "right"; ctx.fillText(String(pages.length), W - M, H - 5);
+    y = top;
+  };
+
+  const sectionBar = (name: string, count: number) => {
+    roundRectPath(ctx, M, y, W - 2 * M, secH, 2);
+    ctx.fillStyle = ink ? css(mix(t.card, WHITE, 0.9)) : "rgba(255,255,255,0.94)"; ctx.fill();
+    roundRectPath(ctx, M, y, 3, secH, 1.5); ctx.fillStyle = accent; ctx.fill();
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillStyle = cardColor;
+    ctx.font = `5.6px CatBebas, sans-serif`; ctx.fillText(name.toUpperCase(), M + 6, y + secH / 2 + 0.4);
+    ctx.textAlign = "right"; ctx.font = `600 3px CatPop, sans-serif`; ctx.fillStyle = css(MUTED);
+    ctx.fillText(`${count} produk`, W - M - 4, y + secH / 2);
+    ctx.textBaseline = "alphabetic";
+    y += secH + gap;
+  };
+
+  const card = async (e: CatalogEntry, x: number, cy: number) => {
+    // kartu putih berbingkai warna tema
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.18)"; ctx.shadowBlur = 1.2 * BPX; ctx.shadowOffsetY = 0.4 * BPX;
+    roundRectPath(ctx, x, cy, cw, ch, 2.4); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = 0.55 * k; ctx.strokeStyle = cardColor; roundRectPath(ctx, x, cy, cw, ch, 2.4); ctx.stroke();
+    const pad = 2.2 * k;
+    // label kode (A01)
+    const code = codes.get(e) ?? "";
+    ctx.font = `${4.4 * k}px CatBebas, sans-serif`;
+    const bw = ctx.measureText(code).width + 3.6 * k, bh = 5.6 * k;
+    roundRectPath(ctx, x - 0.6, cy - 0.6, bw, bh, 1.4 * k); ctx.fillStyle = accent; ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(code, x - 0.6 + bw / 2, cy - 0.6 + bh / 2 + 0.3 * k);
+    // nama barang (tengah, maks 2 baris)
+    ctx.textBaseline = "alphabetic"; ctx.fillStyle = "#101828";
+    let fs = 3.5 * k; ctx.font = `600 ${fs}px CatPop, sans-serif`;
+    let nl = wrap(ctx, e.name.toUpperCase(), cw - 2 * pad - bw * 0.6, 2);
+    if (nl.some((l) => l.endsWith("…"))) { fs = 3 * k; ctx.font = `600 ${fs}px CatPop, sans-serif`; nl = wrap(ctx, e.name.toUpperCase(), cw - 2 * pad - bw * 0.6, 2); }
+    let ty = cy + bh + 0.6 * k;
+    for (const l of nl) { ty += fs * 1.12; ctx.fillText(l, x + cw / 2 + bw * 0.15, ty); }
+    // keterangan ukuran / varian (merah)
+    const hl = specValue(e.description, /ukuran|varian|kapasitas|volume|size|isi bersih|netto/i);
+    if (hl) { ty += 4.2 * k; ctx.font = `${4.4 * k}px CatBebas, sans-serif`; ctx.fillStyle = RED; ctx.fillText(wrap(ctx, hl.toUpperCase(), cw - 2 * pad, 1)[0], x + cw / 2, ty); }
+    // area bawah: harga kiri, kode/isi kanan
+    const fh = 8 * k, fy = cy + ch - fh;
+    ctx.strokeStyle = "rgba(16,24,40,0.10)"; ctx.lineWidth = 0.25; ctx.beginPath(); ctx.moveTo(x + pad, fy); ctx.lineTo(x + cw - pad, fy); ctx.stroke();
+    const isi = specValue(e.description, /^isi\b|isi per|per dus|per pack/i);
+    const st = stockText(e, o.stock);
+    const right = [o.showCode && e.code ? e.code : "", isi ? `isi : ${isi}` : st].filter(Boolean);
+    ctx.textAlign = "right";
+    ctx.font = `600 ${2.5 * k}px CatPop, sans-serif`; ctx.fillStyle = css(MUTED);
+    right.slice(0, 2).forEach((r, i) => ctx.fillText(wrap(ctx, r, cw * 0.42, 1)[0], x + cw - pad, fy + (right.length > 1 ? 3.2 + i * 3 : 4.9) * k));
+    if (o.showPrice && e.price !== null) {
+      ctx.textAlign = "left"; ctx.fillStyle = RED;
+      const pt = `${priceLabel ? `${priceLabel.toUpperCase()} : ` : ""}${fmtRp(e.price)}`;
+      let ps = 3.3 * k; ctx.font = `600 ${ps}px CatPop, sans-serif`;
+      const pw = cw - 2 * pad - (right.length ? Math.min(cw * 0.42, Math.max(...right.map((r) => ctx.measureText(r).width))) + 1.5 : 0);
+      while (ps > 2.2 * k && ctx.measureText(pt).width > pw) { ps -= 0.1; ctx.font = `600 ${ps}px CatPop, sans-serif`; }
+      ctx.fillText(pt, x + pad, fy + 5.2 * k);
+    }
+    // foto di tengah
+    const px0 = x + pad, py0 = ty + 1.2 * k, pw0 = cw - 2 * pad, ph0 = fy - 1 * k - py0;
+    if (o.photos !== "none" && ph0 > 6) {
+      const url = e.photos[0];
+      const bmp = url ? await loadBitmap(url) : null;
+      if (bmp) {
+        const cut = cutout(bmp, url!);
+        const src: CanvasImageSource = cut ?? bmp, sw = cut ? cut.width : bmp.width, sh = cut ? cut.height : bmp.height;
+        const sc = Math.min(pw0 / sw, ph0 / sh), w = sw * sc, h = sh * sc;
+        ctx.save();
+        if (cut) { ctx.shadowColor = "rgba(0,0,0,0.22)"; ctx.shadowBlur = 1.4 * BPX; ctx.shadowOffsetY = 0.5 * BPX; }
+        ctx.drawImage(src, px0 + (pw0 - w) / 2, py0 + (ph0 - h) / 2, w, h);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = "#F2F4F7"; roundRectPath(ctx, px0, py0, pw0, ph0, 2); ctx.fill();
+        ctx.fillStyle = "#98A2B3"; ctx.textAlign = "center"; ctx.font = `600 ${2.6 * k}px CatPop, sans-serif`; ctx.fillText("Tanpa foto", px0 + pw0 / 2, py0 + ph0 / 2);
+      }
+    }
+  };
+
+  newPage();
+  for (const [g, list] of groups) {
+    if (groups.length > 1 || g) {
+      if (y + secH + gap + ch > bottom + 0.01) newPage();
+      sectionBar(g || "Lainnya", list.length);
+    }
+    for (let i = 0; i < list.length; i += cols) {
+      if (y + ch > bottom + 0.01) newPage();
+      for (let c = 0; c < cols && i + c < list.length; c++) {
+        await card(list[i + c], M + c * (cw + gap), y);
+        onProgress?.(++done, entries.length);
+      }
+      y += ch + gap;
+    }
+  }
+  return pages;
+}
+
+/** Halaman brosur sebagai file JPG (untuk dibagikan ke WhatsApp). */
+export async function brosurImages(entries: CatalogEntry[], o: CatalogOptions, d: DesignOptions, baseName: string, onProgress?: (done: number, total: number) => void): Promise<File[]> {
+  const pages = await buildBrosurPages(entries, o, d, onProgress);
+  return Promise.all(pages.map((c, i) => new Promise<File>((resolve, reject) => c.toBlob((b) => b ? resolve(new File([b], `${baseName}${pages.length > 1 ? `-${i + 1}` : ""}.jpg`, { type: "image/jpeg" })) : reject(new Error("Gagal membuat gambar")), "image/jpeg", 0.9))));
 }
 
 /* ---------------- pembangun PDF ---------------- */
 export async function buildDesignedCatalog(entries: CatalogEntry[], o: CatalogOptions, d: DesignOptions, onProgress?: (done: number, total: number) => void) {
   const { jsPDF } = await import("jspdf");
+  if (d.layout === "brosur") {
+    const pages = await buildBrosurPages(entries, o, d, onProgress);
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+    doc.setProperties({ title: o.title || `Katalog ${o.company}`, creator: "Smart Stock", subject: "Katalog produk" });
+    pages.forEach((c, i) => { if (i) doc.addPage("a4", "portrait"); doc.addImage(c.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, 210, 297, undefined, "FAST"); });
+    return doc;
+  }
   const landscape = d.layout === "showcase";
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: landscape ? "landscape" : "portrait", compress: true });
   doc.setProperties({ title: o.title || `Katalog ${o.company}`, creator: "Smart Stock", subject: "Katalog produk" });
   const F = new Fonts(doc); await F.init();
-  const t = THEMES[d.theme];
+  const t = themeOf(d);
   const ink = d.inkSaver;
   const W = landscape ? 297 : 210, H = landscape ? 210 : 297, M = 14;
   const fg: RGB = ink ? INK : WHITE;

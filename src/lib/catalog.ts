@@ -61,5 +61,6 @@ export function catalogText(entries: CatalogEntry[], o: CatalogOptions) {
 function groupBy(entries: CatalogEntry[]) {
   const m = new Map<string, CatalogEntry[]>();
   for (const e of entries) { if (!m.has(e.group)) m.set(e.group, []); m.get(e.group)!.push(e); }
-  return [...m.entries()].sort((a, b) => (a[0] || "~").localeCompare(b[0] || "~"));
+  // Grup berurutan A–Z; barang tanpa grup ("Lainnya") selalu paling akhir.
+  return [...m.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0], "id"));
 }

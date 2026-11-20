@@ -119,8 +119,8 @@ export default function LaporanPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-4 lg:px-6">
         {tab !== "stok" && tab !== "mati" ? (
           <div className="flex items-end gap-2">
-            <label className="flex flex-1 flex-col gap-1 text-xs font-semibold text-ink-3">Dari<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-            <label className="flex flex-1 flex-col gap-1 text-xs font-semibold text-ink-3">Sampai<Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-ink-3">Dari<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-ink-3">Sampai<Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           </div>
         ) : null}
 
