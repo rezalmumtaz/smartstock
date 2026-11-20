@@ -308,6 +308,33 @@ function groupBy(entries: CatalogEntry[]) {
   return [...m.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0], "id"));
 }
 
+/* ---------------- logo toko ---------------- */
+/** Logo sebagai PNG (data URL) + rasio, untuk PDF vektor. null bila tidak ada / gagal dimuat. */
+async function logoPng(url: string | null | undefined): Promise<{ data: string; ratio: number; bmp: ImageBitmap } | null> {
+  if (!url) return null;
+  const bmp = await loadBitmap(url);
+  if (!bmp) return null;
+  const s = Math.min(1, 600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(bmp.width * s)); c.height = Math.max(1, Math.round(bmp.height * s));
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  return { data: c.toDataURL("image/png"), ratio: bmp.width / bmp.height, bmp };
+}
+
+/** Kotak putih membulat berisi logo (lebar mengikuti rasio logo), digambar di canvas. Mengembalikan lebar kotak. */
+function drawLogoBox(ctx: CanvasRenderingContext2D, bmp: ImageBitmap, x: number, cy: number, h: number, maxW: number) {
+  const pad = h * 0.12, ih = h - 2 * pad;
+  const iw = Math.min(maxW - 2 * pad, ih * (bmp.width / bmp.height));
+  const w = Math.max(h, iw + 2 * pad);
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.18)"; ctx.shadowBlur = 1.2 * BPX; ctx.shadowOffsetY = 0.4 * BPX;
+  roundRectPath(ctx, x, cy - h / 2, w, h, h * 0.22); ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.restore();
+  const sc = Math.min(iw / bmp.width, ih / bmp.height), dw = bmp.width * sc, dh = bmp.height * sc;
+  ctx.drawImage(bmp, x + (w - dw) / 2, cy - dh / 2, dw, dh);
+  return w;
+}
+
 /* ---------------- brosur: banyak barang per halaman ---------------- */
 const BROSUR_GRID: Record<BrosurGrid, [number, number]> = { "2x3": [2, 3], "3x4": [3, 4], "4x5": [4, 5] };
 const BPX = 7; // piksel per mm untuk brosur (±178 dpi): tajam di HP & cukup untuk cetak A4
@@ -372,6 +399,7 @@ function initials(name: string) {
  */
 export async function buildBrosurPages(entries: CatalogEntry[], o: CatalogOptions, d: DesignOptions, onProgress?: (done: number, total: number) => void): Promise<HTMLCanvasElement[]> {
   await loadCanvasFonts();
+  const logo = o.logo ? await loadBitmap(o.logo) : null;
   const t = themeOf(d), ink = d.inkSaver;
   const [cols, rows] = BROSUR_GRID[d.perPage ?? "3x4"];
   const W = 210, H = 297, M = 8, gap = 3, headH = 34, footH = 9, secH = 8;
@@ -413,13 +441,17 @@ export async function buildBrosurPages(entries: CatalogEntry[], o: CatalogOption
     ctx.fillStyle = ink ? css(t.card, 0.06) : "rgba(255,255,255,0.10)";
     ctx.beginPath(); ctx.moveTo(W - M - 70, M); ctx.lineTo(W - M - 64, M); ctx.lineTo(W - M - 84, M + headH); ctx.lineTo(W - M - 90, M + headH); ctx.closePath(); ctx.fill();
     ctx.restore();
-    // logo inisial
+    // logo toko (atau inisial bila belum ada logo)
     const lx = M + 6, ly = M + headH / 2, lr = 10;
-    ctx.fillStyle = ink ? cardColor : "#fff"; ctx.beginPath(); ctx.arc(lx + lr, ly, lr, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = ink ? "#fff" : cardColor; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = `${lr * 1.05}px CatBebas, sans-serif`; ctx.fillText(initials(o.company), lx + lr, ly + 0.6);
+    let logoW = 2 * lr;
+    if (logo) logoW = drawLogoBox(ctx, logo, lx, ly, 24, 46);
+    else {
+      ctx.fillStyle = ink ? cardColor : "#fff"; ctx.beginPath(); ctx.arc(lx + lr, ly, lr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = ink ? "#fff" : cardColor; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `${lr * 1.05}px CatBebas, sans-serif`; ctx.fillText(initials(o.company), lx + lr, ly + 0.6);
+    }
     // nama toko + kontak
-    const tx = lx + 2 * lr + 4, tw = W - M - 92 - tx;
+    const tx = lx + logoW + 4, tw = W - M - 92 - tx;
     ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     ctx.fillStyle = ink ? cardColor : "#fff";
     let size = 13;
@@ -562,6 +594,19 @@ export async function buildDesignedCatalog(entries: CatalogEntry[], o: CatalogOp
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: landscape ? "landscape" : "portrait", compress: true });
   doc.setProperties({ title: o.title || `Katalog ${o.company}`, creator: "Smart Stock", subject: "Katalog produk" });
   const F = new Fonts(doc); await F.init();
+  const logo = await logoPng(o.logo);
+  /** Logo di PDF vektor, tinggi h (mm), rata kanan pada x bila right. Mengembalikan lebar. */
+  const putLogo = (x: number, y: number, h: number, right = false) => {
+    if (!logo) return 0;
+    const w = Math.min(h * logo.ratio, h * 3);
+    const hh = w / logo.ratio;
+    doc.setFillColor(255, 255, 255);
+    const pad = 1.6;
+    const bx = right ? x - w - 2 * pad : x;
+    doc.roundedRect(bx, y - pad, w + 2 * pad, hh + 2 * pad, 2.4, 2.4, "F");
+    doc.addImage(logo.data, "PNG", bx + pad, y, w, hh, "store-logo", "FAST");
+    return w + 2 * pad;
+  };
   const t = themeOf(d);
   const ink = d.inkSaver;
   const W = landscape ? 297 : 210, H = landscape ? 210 : 297, M = 14;
@@ -626,7 +671,8 @@ export async function buildDesignedCatalog(entries: CatalogEntry[], o: CatalogOp
     let ty = cy - (lines.length * lh) / 2 + lh * 0.78;
     doc.setTextColor(...WHITE);
     for (const l of lines.slice(0, 5)) { doc.text(l, cx, ty, { align: "center" }); ty += lh; }
-    F.body(15, true); doc.setTextColor(...fg); doc.text(o.company.toUpperCase(), M, M + 6, { charSpace: 0.6 });
+    const lw = putLogo(M, M - 1, 14);
+    F.body(15, true); doc.setTextColor(...fg); doc.text(o.company.toUpperCase(), M + (lw ? lw + 4 : 0), M + 7, { charSpace: 0.6 });
     pill(`${entries.length} produk`, W - M - pillWidth(`${entries.length} produk`), M);
     F.body(9.5); doc.setTextColor(...fgMuted);
     const gnames = groups.map(([g]) => g || "Lainnya");
@@ -743,6 +789,7 @@ export async function buildDesignedCatalog(entries: CatalogEntry[], o: CatalogOp
       if (page > 0) footer(page);
       newPage(); page++; plainBg();
       pill(o.company, M, 11);
+      putLogo(W - M, 9, 16, true);
       F.title(26); doc.setTextColor(...titleColor);
       doc.text((o.title || o.company).toUpperCase(), M, 29);
       y = top + 2;
@@ -817,6 +864,7 @@ export async function buildDesignedCatalog(entries: CatalogEntry[], o: CatalogOp
       }
       doc.addImage(bandData, "JPEG", 0, 0, W, band, bandAlias, "FAST");
       pill(o.company, M, 7);
+      putLogo(W - M, 6, 18, true);
       F.title(22); doc.setTextColor(...(ink ? hex(t.bg[1]) : WHITE));
       doc.text((o.title || o.company).toUpperCase(), M, 25.5);
       y = band + 9;

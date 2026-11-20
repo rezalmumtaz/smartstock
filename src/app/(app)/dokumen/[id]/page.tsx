@@ -88,7 +88,7 @@ export default function DocumentPage() {
     const time = when ? new Date(when).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
     const now = new Date();
     return {
-      company: { name: tenant?.name ?? "Smart Stock", address: tenant?.address, phone: tenant?.phone },
+      company: { name: tenant?.name ?? "Smart Stock", address: tenant?.address, phone: tenant?.phone, logo: tenant?.logo_url },
       title: receiptTitle(doc.doc_type, doc.status),
       number: doc.number,
       date: `${fmtDate(recvd && doc.received_at ? doc.received_at : doc.doc_date)}${time ? ` ${time}` : ""}`,

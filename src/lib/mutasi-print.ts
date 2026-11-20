@@ -27,6 +27,7 @@ export interface PrintItem {
 }
 export interface MutasiPrintData {
   company: string;
+  logo?: string | null;
   warehouse: string;
   from: string;
   to: string;
@@ -65,7 +66,7 @@ export function mutasiPrintHtml(d: MutasiPrintData, o: MutasiPrintOptions): stri
   const period = `${fmtDate(d.from)} – ${fmtDate(d.to)}`;
   const head = `
 <div class="h">
-  <div><h1>${esc(d.company)}</h1><h2>${esc(TITLES[o.kind])}</h2></div>
+  <div class="co">${d.logo ? `<img src="${esc(d.logo)}" alt="">` : ""}<div><h1>${esc(d.company)}</h1><h2>${esc(TITLES[o.kind])}</h2></div></div>
   <table class="meta">
     <tr><td>Gudang</td><td>${esc(d.warehouse)}</td></tr>
     ${o.kind === "cek" ? `<tr><td>Stok per</td><td>${esc(fmtDate(d.to))}</td></tr>` : `<tr><td>Periode</td><td>${esc(period)}</td></tr>`}
@@ -112,6 +113,7 @@ ${rows.length ? rows.join("\n") : `<tr><td colspan="8" class="em">Tidak ada perg
 * { box-sizing: border-box; }
 body { font: 9.5pt/1.35 "Segoe UI", Roboto, Arial, sans-serif; color: #101828; margin: 0; }
 .h { display: flex; justify-content: space-between; gap: 12px; border-bottom: 2px solid #0E7C66; padding-bottom: 6px; margin-bottom: 8px; }
+.co { display: flex; gap: 10px; align-items: center; } .co img { max-height: 16mm; max-width: 38mm; object-fit: contain; }
 h1 { font-size: 13pt; margin: 0; } h2 { font-size: 11pt; margin: 2px 0 0; color: #0E7C66; }
 .meta { font-size: 8.5pt; border-collapse: collapse; } .meta td { padding: 0 0 1px 8px; vertical-align: top; } .meta td:first-child { color: #667085; }
 .t { width: 100%; border-collapse: collapse; } .t th, .t td { border: 1px solid #C9CED6; padding: 3px 5px; vertical-align: top; }

@@ -11,6 +11,8 @@ export interface Tenant {
   phone: string | null;
   npwp: string | null;
   bank_account: string | null;
+  /** Logo toko (URL Storage publik atau data URL). */
+  logo_url?: string | null;
   currency: string;
   locked_until: string | null;
 }

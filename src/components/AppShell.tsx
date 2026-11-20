@@ -46,7 +46,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {/* Sidebar desktop */}
       <aside className="sticky top-0 hidden h-screen w-64 flex-none flex-col gap-1 border-r border-line bg-white px-3 py-5 lg:flex">
         <Link href="/" className="mb-5 flex items-center gap-2.5 px-2">
-          <img src="/icons/icon-192.png" alt="" width={34} height={34} className="rounded-[10px]" />
+          <img src={tenant?.logo_url || "/icons/icon-192.png"} alt="" width={34} height={34} className="h-[34px] w-[34px] flex-none rounded-[10px] object-contain" />
           <span className="flex min-w-0 flex-col">
             <span className="text-[17px] font-bold leading-tight">Smart Stock</span>
             <span className="truncate text-xs text-ink-muted">{tenant.name}</span>
