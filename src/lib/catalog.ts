@@ -26,6 +26,8 @@ export interface CatalogOptions {
   photos: PhotoMode;
   showPrice: boolean;
   showCode: boolean;
+  /** Logo toko (URL atau data URL); kosong = inisial nama toko. */
+  logo?: string | null;
 }
 
 export function stockText(e: CatalogEntry, mode: StockMode) {

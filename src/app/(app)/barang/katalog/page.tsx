@@ -55,7 +55,7 @@ export default function KatalogPage() {
     price: isOwner && cat.prices[it.id] ? Number(cat.prices[it.id].sell_price) : null,
     qty: qtyIn(cat, it.id, whIds), min: it.min_qty, photos: it.image_urls ?? [], description: it.description,
   })), [cat, chosen, groupName, isOwner, whIds]);
-  const o = { ...opt, showPrice: isOwner && opt.showPrice };
+  const o = { ...opt, showPrice: isOwner && opt.showPrice, logo: tenant?.logo_url ?? null };
   const baseName = `${(o.title || "katalog").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase()}-${todayISO()}`;
   const fileName = `${baseName}.pdf`;
 

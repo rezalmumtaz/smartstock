@@ -59,7 +59,7 @@ export default function BerandaPage() {
     <>
       <header className="flex flex-col gap-3 border-b border-line bg-white px-4 pb-3 pt-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
         <div className="flex items-center gap-2.5 lg:hidden">
-          <img src="/icons/icon-192.png" alt="" width={34} height={34} className="rounded-[10px]" />
+          <img src={tenant?.logo_url || "/icons/icon-192.png"} alt="" width={34} height={34} className="h-[34px] w-[34px] flex-none rounded-[10px] object-contain" />
           <div className="flex flex-col">
             <span className="text-[17px] font-bold">{tenant?.name}</span>
             <span className="text-xs text-ink-muted">Halo, {firstName} · {role ? ROLE_LABEL[role] : ""}</span>

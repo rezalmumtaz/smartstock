@@ -7,7 +7,7 @@ export const PAPER_COLS: Record<"58" | "80", number> = { "58": 32, "80": 48 };
 
 export interface ReceiptLine { name: string; code?: string | null; location?: string | null; qty: number; unit?: string | null; note?: string | null }
 export interface ReceiptData {
-  company: { name: string; address?: string | null; phone?: string | null };
+  company: { name: string; address?: string | null; phone?: string | null; logo?: string | null };
   title: string;
   number: string;
   date: string;
@@ -157,7 +157,8 @@ export function receiptHtml(d: ReceiptData, paper: Paper): string {
 html,body{margin:0;background:#fff;color:#000}
 .r{width:${mm - 6}mm;margin:0 auto;padding:3mm 0 8mm;font:${paper === "58" ? "8.6pt" : "8.8pt"}/1.25 "Courier New",ui-monospace,monospace;white-space:pre}
 .b{font-weight:700}.c{text-align:center}.big{font-size:1.35em;line-height:1.3}
-</style></head><body><div class="r">${body}</div></body></html>`;
+.lg{display:block;margin:0 auto 2mm;max-width:${paper === "58" ? 30 : 40}mm;max-height:16mm;object-fit:contain}
+</style></head><body><div class="r">${d.company.logo ? `<img class="lg" src="${esc(d.company.logo)}" alt="">` : ""}${body}</div></body></html>`;
   }
   const total = d.lines.reduce((s, l) => s + l.qty, 0);
   const meta = [["No", d.number], ["Tanggal", d.date], ...d.meta].map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td>: ${esc(v || "-")}</td></tr>`).join("");
@@ -167,6 +168,7 @@ html,body{margin:0;background:#fff;color:#000}
 @page{size:A4 portrait;margin:14mm}
 *{box-sizing:border-box}body{margin:0;font:10pt/1.4 Arial,Helvetica,sans-serif;color:#111}
 .h{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:8px}
+.co{display:flex;gap:10px;align-items:center}.co img{max-height:18mm;max-width:40mm;object-fit:contain}
 .h h1{margin:0;font-size:16pt}.h p{margin:2px 0 0;color:#444;font-size:9pt}
 .t{text-align:right}.t h2{margin:0;font-size:13pt;letter-spacing:.5px}
 .void{color:#c00;font-weight:700;margin-top:4px}
@@ -178,7 +180,7 @@ table.i th{background:#f0f0f0;text-align:left;font-size:9pt}.n{width:26px;text-a
 .s{text-align:center;min-width:150px}.s .line{margin:62px auto 0;width:170px;border-top:1px solid #333}
 .f{white-space:pre-line;margin-top:24px;color:#777;font-size:8pt;text-align:center}
 </style></head><body>
-<div class="h"><div><h1>${esc(d.company.name)}</h1>${d.company.address ? `<p>${esc(d.company.address)}</p>` : ""}${d.company.phone ? `<p>Telp ${esc(d.company.phone)}</p>` : ""}</div>
+<div class="h"><div class="co">${d.company.logo ? `<img src="${esc(d.company.logo)}" alt="">` : ""}<div><h1>${esc(d.company.name)}</h1>${d.company.address ? `<p>${esc(d.company.address)}</p>` : ""}${d.company.phone ? `<p>Telp ${esc(d.company.phone)}</p>` : ""}</div></div>
 <div class="t"><h2>${esc(d.title)}</h2>${d.voided ? `<div class="void">DIBATALKAN</div>` : ""}</div></div>
 <table class="meta">${meta}</table>
 <table class="i"><thead><tr><th class="n">No</th><th>Barang</th><th>Lokasi simpan</th><th class="q">Qty</th><th>Satuan</th><th class="ck">Cek</th></tr></thead>
@@ -201,10 +203,16 @@ export function printHtml(html: string): Promise<void> {
     let done = false;
     const cleanup = () => { if (done) return; done = true; setTimeout(() => f.remove(), 500); resolve(); };
     f.contentWindow!.addEventListener("afterprint", cleanup);
-    setTimeout(() => {
+    // Tunggu gambar (logo) selesai dimuat, maks 4 detik, supaya tidak tercetak kosong.
+    const imgs = [...doc.images].filter((i) => !i.complete);
+    const ready = Promise.race([
+      Promise.all(imgs.map((i) => new Promise((r) => { i.onload = i.onerror = r; }))),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+    ready.then(() => setTimeout(() => {
       try { f.contentWindow!.focus(); f.contentWindow!.print(); } catch { cleanup(); }
       setTimeout(cleanup, 120000);
-    }, 300);
+    }, 300));
   });
 }
 

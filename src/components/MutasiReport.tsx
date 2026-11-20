@@ -215,6 +215,7 @@ function PrintSheet({ open, onClose, rows, cat, whIds, from, to, warehouseNames,
       }));
       const html = mutasiPrintHtml({
         company: tenant?.name ?? "Smart Stock",
+        logo: tenant?.logo_url,
         warehouse: whIds.map((w) => warehouseNames[w]).filter(Boolean).join(", "),
         from, to, printedBy: session?.user.email?.split("@")[0] ?? "", filterNote, items,
       }, opt);
